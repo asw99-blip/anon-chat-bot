@@ -95,10 +95,10 @@ def get_stats():
 
 init_db()
 
-# ============ ХРАНИЛИЩЕ В ПАМЯТИ (очередь и чаты) ============
+# ============ ХРАНИЛИЩЕ В ПАМЯТИ ============
 waiting_queue = set()
 active_chats = {}
-report_pending = {}  # user_id -> True (ожидаем текст жалобы)
+report_pending = {}
 
 # ============ КЛАВИАТУРЫ ============
 def main_kb():
@@ -176,7 +176,6 @@ async def find_partner(message: Message):
         await message.answer("Вы уже в очереди. Ожидайте...")
         return
     
-    # Ищем партнёра
     partner_id = None
     for uid in list(waiting_queue):
         if uid != user_id and not is_banned(uid):
@@ -210,7 +209,6 @@ async def find_partner(message: Message):
         )
 
 async def disconnect_pair(user_id, notify=True):
-    """Разрывает пару и убирает из очереди"""
     waiting_queue.discard(user_id)
     report_pending.pop(user_id, None)
     
@@ -250,7 +248,6 @@ async def next_partner(message: Message):
     if user_id in active_chats:
         await disconnect_pair(user_id, notify=True)
         await message.answer("⏭ Ищем нового собеседника...", reply_markup=main_kb())
-        # Автоматически запускаем поиск
         await find_partner(message)
     elif user_id in waiting_queue:
         await message.answer("⏳ Вы уже в очереди. Ожидайте...")
@@ -291,6 +288,70 @@ async def go_menu(message: Message):
         await disconnect_pair(user_id, notify=True)
     await message.answer("Главное меню", reply_markup=main_kb())
 
+# ============ АДМИН-КОМАНДЫ (перед relay_message!) ============
+
+@dp.message(Command("stats"))
+async def cmd_stats(message: Message):
+    if message.from_user.id != ADMIN_ID:
+        await message.answer("⛔ Эта команда только для администратора.")
+        return
+    total_users, total_bans, total_reports = get_stats()
+    await message.answer(
+        f"📊 Статистика:\n\n"
+        f"👤 Пользователей: {total_users}\n"
+        f"🚫 Заблокировано: {total_bans}\n"
+        f"🚨 Жалоб: {total_reports}\n\n"
+        f"🟢 Активных чатов: {len(active_chats)//2}\n"
+        f"⏳ В очереди: {len(waiting_queue)}"
+    )
+
+@dp.message(Command("ban"))
+async def cmd_ban(message: Message):
+    if message.from_user.id != ADMIN_ID:
+        await message.answer("⛔ Эта команда только для администратора.")
+        return
+    
+    args = message.text.split()
+    if len(args) < 2:
+        await message.answer("Использование: /ban id [причина]")
+        return
+    
+    try:
+        user_id = int(args[1])
+        reason = " ".join(args[2:]) if len(args) > 2 else "Без причины"
+        ban_user(user_id, reason)
+        
+        if user_id in active_chats:
+            await disconnect_pair(user_id, notify=True)
+            try:
+                await bot.send_message(user_id, "🚫 Вы заблокированы администратором.", reply_markup=main_kb())
+            except:
+                pass
+        
+        await message.answer(f"🚫 Пользователь {user_id} заблокирован.\nПричина: {reason}")
+    except ValueError:
+        await message.answer("Неверный ID. Использование: /ban 123456789")
+
+@dp.message(Command("unban"))
+async def cmd_unban(message: Message):
+    if message.from_user.id != ADMIN_ID:
+        await message.answer("⛔ Эта команда только для администратора.")
+        return
+    
+    args = message.text.split()
+    if len(args) < 2:
+        await message.answer("Использование: /unban id")
+        return
+    
+    try:
+        user_id = int(args[1])
+        unban_user(user_id)
+        await message.answer(f"✅ Пользователь {user_id} разблокирован.")
+    except ValueError:
+        await message.answer("Неверный ID. Использование: /unban 123456789")
+
+# ============ ПЕРЕСЫЛКА СООБЩЕНИЙ ============
+
 @dp.message(F.content_type.in_({
     "text", "photo", "video", "voice", "audio",
     "document", "sticker", "animation", "video_note"
@@ -298,7 +359,6 @@ async def go_menu(message: Message):
 async def relay_message(message: Message):
     user_id = message.from_user.id
     
-    # Обработка жалобы (текст после нажатия 🚨)
     if user_id in report_pending:
         reason = message.text or "Медиа-сообщение"
         partner_id = active_chats.get(user_id)
@@ -306,7 +366,6 @@ async def relay_message(message: Message):
         if partner_id:
             add_report(user_id, partner_id, reason)
             
-            # Уведомляем админа
             try:
                 await bot.send_message(
                     ADMIN_ID,
@@ -326,7 +385,6 @@ async def relay_message(message: Message):
         del report_pending[user_id]
         return
     
-    # Обычная пересылка
     if user_id in waiting_queue:
         await message.answer("⏳ Подождите, ищем собеседника...")
         return
@@ -341,66 +399,6 @@ async def relay_message(message: Message):
     except Exception as e:
         logging.error(f"Ошибка пересылки: {e}")
         await message.answer("⚠️ Не удалось отправить сообщение.")
-
-# ============ АДМИН-КОМАНДЫ ============
-
-@dp.message(Command("stats"))
-async def cmd_stats(message: Message):
-    if message.from_user.id != ADMIN_ID:
-        return
-    total_users, total_bans, total_reports = get_stats()
-    await message.answer(
-        f"📊 Статистика:\n\n"
-        f"👤 Пользователей: {total_users}\n"
-        f"🚫 Заблокировано: {total_bans}\n"
-        f"🚨 Жалоб: {total_reports}\n\n"
-        f"🟢 Активных чатов: {len(active_chats)//2}\n"
-        f"⏳ В очереди: {len(waiting_queue)}"
-    )
-
-@dp.message(Command("ban"))
-async def cmd_ban(message: Message):
-    if message.from_user.id != ADMIN_ID:
-        return
-    
-    args = message.text.split()
-    if len(args) < 2:
-        await message.answer("Использование: /ban id [причина]")
-        return
-    
-    try:
-        user_id = int(args[1])
-        reason = " ".join(args[2:]) if len(args) > 2 else "Без причины"
-        ban_user(user_id, reason)
-        
-        # Если пользователь в чате — разрываем пару
-        if user_id in active_chats:
-            await disconnect_pair(user_id, notify=True)
-            try:
-                await bot.send_message(user_id, "🚫 Вы заблокированы администратором.", reply_markup=main_kb())
-            except:
-                pass
-        
-        await message.answer(f"🚫 Пользователь {user_id} заблокирован.\nПричина: {reason}")
-    except ValueError:
-        await message.answer("Неверный ID. Использование: /ban 123456789")
-
-@dp.message(Command("unban"))
-async def cmd_unban(message: Message):
-    if message.from_user.id != ADMIN_ID:
-        return
-    
-    args = message.text.split()
-    if len(args) < 2:
-        await message.answer("Использование: /unban id")
-        return
-    
-    try:
-        user_id = int(args[1])
-        unban_user(user_id)
-        await message.answer(f"✅ Пользователь {user_id} разблокирован.")
-    except ValueError:
-        await message.answer("Неверный ID. Использование: /unban 123456789")
 
 # ============ ЗАПУСК ============
 async def main():
