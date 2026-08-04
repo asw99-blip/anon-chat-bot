@@ -4,11 +4,11 @@ import sqlite3
 import os
 from datetime import datetime
 from aiogram import Bot, Dispatcher, F
-from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, FSInputFile
 from aiogram.filters import Command
 
 # ============ КОНФИГУРАЦИЯ ============
-BOT_TOKEN = "8943522365:AAHlvxad1-ByGyfRz7XjF9GlU5kMoFhT24Y"
+BOT_TOKEN = "8943522365:AAHSxTCA9OVvDsfHLn_sOo1RD5tifJoYY58"
 ADMIN_ID = 8987146035
 
 # ============ БАЗА ДАННЫХ ============
@@ -154,9 +154,20 @@ async def cmd_start(message: Message):
     waiting_queue.discard(user_id)
     report_pending.pop(user_id, None)
     
-    await message.answer(
-        "👋 Добро пожаловать в анонимный чат!\n\n"
-        "Нажмите кнопку ниже, чтобы найти собеседника.",
+    welcome_text = (
+        "Что умеет этот бот?\n\n"
+        "🔒 Оригинальный и самый популярный Анонимный чат в Телеграме!\n\n"
+        "💬 Общайся анонимно с случайными собеседниками.\n\n"
+        "🔞 Чат строго 18+\n\n"
+        "🔍 Для поиска собеседника нажми кнопку внизу экрана"
+    )
+    
+    # Отправляем картинку из файла (должен лежать рядом с bot.py)
+    photo = FSInputFile("12983.jpg")
+    
+    await message.answer_photo(
+        photo=photo,
+        caption=welcome_text,
         reply_markup=main_kb()
     )
 
@@ -288,7 +299,7 @@ async def go_menu(message: Message):
         await disconnect_pair(user_id, notify=True)
     await message.answer("Главное меню", reply_markup=main_kb())
 
-# ============ АДМИН-КОМАНДЫ (перед relay_message!) ============
+# ============ АДМИН-КОМАНДЫ ============
 
 @dp.message(Command("stats"))
 async def cmd_stats(message: Message):
