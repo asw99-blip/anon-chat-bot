@@ -8,7 +8,7 @@ from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, FSInputF
 from aiogram.filters import Command
 
 # ============ КОНФИГУРАЦИЯ ============
-BOT_TOKEN = "8943522365:AAHSxTCA9OVvDsfHLn_sOo1RD5tifJoYY58"
+BOT_TOKEN = "8943522365:AAHlvxad1-ByGyfRz7XjF9GlU5kMoFhT24Y"
 ADMIN_ID = 8987146035
 
 # ============ БАЗА ДАННЫХ ============
