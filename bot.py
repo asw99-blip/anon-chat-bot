@@ -6,7 +6,7 @@ from aiogram.filters import Command
 from aiogram.enums import ParseMode
 
 # ============ КОНФИГУРАЦИЯ ============
-BOT_TOKEN = "8943522365:AAHlvxad1-ByGyfRz7XjF9GlU5kMoFhT24Y"
+BOT_TOKEN = os.getenv "8943522365:AAHSxTCA9OVvDsfHLn_sOo1RD5tifJoYY58"
 
 # ============ ХРАНИЛИЩЕ В ПАМЯТИ ============
 # Очередь пользователей, ожидающих собеседника
