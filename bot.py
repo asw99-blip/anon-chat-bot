@@ -16,7 +16,7 @@ from aiogram.filters import Command
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8943522365:AAFcdcGGA8FKV3GlOLp7kEk4tyt-Qh96s0c")
 ADMIN_ID = int(os.getenv("ADMIN_ID", "8987146035"))
 
-if BOT_TOKEN == "ВАШ_ТОКЕН_ЗДЕСЬ":
+if BOT_TOKEN == "8943522365:AAFcdcGGA8FKV3GlOLp7kEk4tyt-Qh96s0c":
     raise ValueError("❌ Установите BOT_TOKEN в переменных окружения!")
 if not ADMIN_ID:
     raise ValueError("❌ Установите ADMIN_ID в переменных окружения!")
