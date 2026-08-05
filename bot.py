@@ -12,7 +12,7 @@ from aiogram.types import (
 from aiogram.filters import Command
 
 # ============ КОНФИГУРАЦИЯ ============
-BOT_TOKEN = "8943522365:AAFcdcGGA8FKV3GlOLp7kEk4tyt-Qh96s0c"
+BOT_TOKEN = "В8943522365:AAFcdcGGA8FKV3GlOLp7kEk4tyt-Qh96s0c"
 ADMIN_ID = 8987146035
 DATABASE_URL = os.getenv("DATABASE_URL")
 
@@ -273,6 +273,44 @@ registration_data = {}
 registration_messages = {}
 _chat_lock = asyncio.Lock()
 
+# ============ ТЕКСТ ПРАВИЛ ============
+RULES_TEXT = (
+    "📜 <b>Правила использования бота</b>\n\n"
+    "<b>1. Возрастное ограничение</b>\n"
+    "Использование бота разрешено только лицам старше 18 лет. "
+    "Нажимая «Найти собеседника», вы подтверждаете, что вам исполнилось 18 лет.\n\n"
+    "<b>2. Анонимность</b>\n"
+    "Бот не раскрывает личность собеседников. Однако администратор имеет доступ к ID "
+    "пользователей при рассмотрении жалоб. Не публикуйте чужие персональные данные без согласия.\n\n"
+    "<b>3. Запрещённый контент</b>\n"
+    "Категорически запрещено отправлять:\n"
+    "🚫 Детскую порнографию и материалы сексуального характера с участием несовершеннолетних\n"
+    "🚫 Призывы к насилию, терроризму, суициду\n"
+    "🚫 Пропаганду наркотиков и их сбыта\n"
+    "🚫 Доксинг, угрозы, шантаж, вымогательство\n"
+    "🚫 Спам, флуд, рекламу сторонних ресурсов без согласования\n"
+    "🚫 Мошенничество и фишинг\n\n"
+    "<b>4. Порядок общения</b>\n"
+    "• Уважайте собеседника. Оскорбления, дискриминация и троллинг не приветствуются.\n"
+    "• Если собеседник вам неприятен — нажмите «⏭ Следующий собеседник» или «❌ Завершить чат».\n"
+    "• Не пытайтесь деанонимизировать собеседника против его воли.\n\n"
+    "<b>5. Жалобы и модерация</b>\n"
+    "• Кнопка «🚨 Пожаловаться» отправляет жалобу администратору.\n"
+    "• При подтверждении нарушения собеседник получает <b>перманентный бан</b> без предупреждения.\n"
+    "• Ложные жалобы (спам в жалобах) также караются баном.\n"
+    "• Администратор вправе заблокировать любого пользователя без объяснения причин.\n\n"
+    "<b>6. Рейтинг</b>\n"
+    "После завершения чата вы можете поставить реакцию собеседнику. "
+    "Рейтинг формируется из всех реакций и виден при подборе пары. Накрутка рейтинга запрещена.\n\n"
+    "<b>7. Ответственность</b>\n"
+    "• Администрация не несёт ответственности за действия пользователей и содержание их сообщений.\n"
+    "• Бот предоставляется «как есть». Администратор не гарантирует бесперебойную работу.\n"
+    "• В случае технических сбоев переписка не восстанавливается.\n\n"
+    "<b>8. Изменение правил</b>\n"
+    "Администратор вправе изменить правила в любой момент. "
+    "Продолжение использования бота означает согласие с актуальной редакцией."
+)
+
 # ============ КЛАВИАТУРЫ ============
 def main_kb():
     return ReplyKeyboardMarkup(
@@ -336,6 +374,7 @@ def menu_kb():
             [InlineKeyboardButton(text="🛑 Завершить чат", callback_data="menu_stop"),
              InlineKeyboardButton(text="👫 Поиск по полу", callback_data="menu_gender")],
             [InlineKeyboardButton(text="🔗 Моя ссылка", callback_data="menu_link")],
+            [InlineKeyboardButton(text="📜 Правила", callback_data="menu_rules")],
             [InlineKeyboardButton(text="❌ Закрыть", callback_data="menu_close")]
         ]
     )
@@ -411,8 +450,16 @@ async def cmd_start(message: Message):
     if not await is_registered(user_id):
         await start_registration(message)
         return
-    # Приветственное сообщение убрано — просто показываем клавиатуру
-    await message.answer("👇", reply_markup=main_kb())
+    await message.answer(
+        "👋 Добро пожаловать!\n\n"
+        "📜 /rules — правила использования\n\n"
+        "👇 Выберите действие:",
+        reply_markup=main_kb()
+    )
+
+@dp.message(Command("rules"))
+async def cmd_rules(message: Message):
+    await message.answer(RULES_TEXT, parse_mode="HTML")
 
 @dp.callback_query(F.data.startswith("gender_"))
 async def process_gender(callback: CallbackQuery):
@@ -499,7 +546,8 @@ async def show_menu(message: Message):
         f"🆕 /next — Следующий собеседник\n"
         f"🛑 /stop — Завершить диалог\n"
         f"👫 /pay — Поиск по полу\n"
-        f"🔗 /link — Отправить ссылку на Телеграм\n\n"
+        f"🔗 /link — Отправить ссылку на Телеграм\n"
+        f"📜 /rules — Правила использования\n\n"
         f"Выберите действие:",
         reply_markup=menu_kb()
     )
@@ -593,6 +641,10 @@ async def menu_callback(callback: CallbackQuery):
                 "❌ У вас нет username. Установите его в настройках Telegram.",
                 reply_markup=menu_kb()
             )
+    
+    elif action == "rules":
+        await callback.message.edit_text(RULES_TEXT, parse_mode="HTML", reply_markup=menu_kb())
+        await callback.answer()
 
 @dp.callback_query(F.data.startswith("pref_gender:"))
 async def set_gender_pref(callback: CallbackQuery):
