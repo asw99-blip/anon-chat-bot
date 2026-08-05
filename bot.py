@@ -35,6 +35,13 @@ def init_db():
         registered_at TEXT
     )''')
     
+    c.execute('''CREATE TABLE IF NOT EXISTS ratings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        rated_user_id INTEGER,
+        reaction TEXT,
+        created_at TEXT
+    )''')
+    
     c.execute('''CREATE TABLE IF NOT EXISTS reports (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         reporter_id INTEGER,
@@ -91,6 +98,22 @@ def add_report(reporter_id, reported_id, reason=""):
     conn.commit()
     conn.close()
 
+def add_reaction(rated_user_id, reaction):
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("INSERT INTO ratings (rated_user_id, reaction, created_at) VALUES (?, ?, ?)",
+              (rated_user_id, reaction, datetime.now().isoformat()))
+    conn.commit()
+    conn.close()
+
+def get_user_rating(user_id):
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT reaction, COUNT(*) FROM ratings WHERE rated_user_id = ? GROUP BY reaction", (user_id,))
+    results = c.fetchall()
+    conn.close()
+    return {row[0]: row[1] for row in results}
+
 def get_stats():
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
@@ -125,9 +148,9 @@ init_db()
 waiting_queue = set()
 active_chats = {}
 report_pending = {}
-registration_state = {}      # user_id -> "awaiting_gender" / "awaiting_age"
-registration_messages = {}   # user_id -> [message_ids]
-registration_data = {}       # user_id -> {"gender": "male"/"female"}
+registration_state = {}
+registration_messages = {}
+registration_data = {}
 
 # ============ КЛАВИАТУРЫ ============
 def main_kb():
@@ -165,6 +188,18 @@ def gender_kb():
         inline_keyboard=[
             [InlineKeyboardButton(text="👩 Девушка", callback_data="gender_female")],
             [InlineKeyboardButton(text="👨 Парень", callback_data="gender_male")]
+        ]
+    )
+
+def reaction_kb(partner_id):
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="❤️", callback_data=f"react:❤️:{partner_id}"),
+                InlineKeyboardButton(text="🔥", callback_data=f"react:🔥:{partner_id}"),
+                InlineKeyboardButton(text="🤡", callback_data=f"react:🤡:{partner_id}"),
+                InlineKeyboardButton(text="💩", callback_data=f"react:💩:{partner_id}"),
+            ]
         ]
     )
 
@@ -208,7 +243,6 @@ async def process_gender(callback: CallbackQuery):
     gender_text = "👩 Девушка" if gender == "female" else "👨 Парень"
     registration_data[user_id] = {"gender": gender}
     
-    # Удаляем сообщение с выбором пола
     try:
         await callback.message.delete()
     except:
@@ -362,17 +396,42 @@ async def find_partner(message: Message):
         active_chats[user_id] = partner_id
         active_chats[partner_id] = user_id
         
+        # Получаем рейтинг собеседника
+        rating = get_user_rating(partner_id)
+        rating_text = ""
+        if rating:
+            total = sum(rating.values())
+            if total > 0:
+                rating_text = f"\n\n📊 Рейтинг собеседника: "
+                for emoji, count in sorted(rating.items(), key=lambda x: x[1], reverse=True):
+                    rating_text += f"{emoji} {count}  "
+                rating_text += f"(всего {total})"
+        
         await message.answer(
-            "✅ Собеседник найден! Можете начинать общение.\n\n"
-            "Все сообщения пересылаются анонимно.\n\n"
-            "⏭ — сменить собеседника\n"
-            "🚨 — пожаловаться на нарушение\n"
-            "❌ — завершить чат",
+            f"✅ Собеседник найден!{rating_text}\n\n"
+            f"Можете начинать общение.\n\n"
+            f"Все сообщения пересылаются анонимно.\n\n"
+            f"⏭ — сменить собеседника\n"
+            f"🚨 — пожаловаться на нарушение\n"
+            f"❌ — завершить чат",
             reply_markup=chat_kb()
         )
+        
+        # Рейтинг для партнёра (текущего пользователя)
+        rating2 = get_user_rating(user_id)
+        rating_text2 = ""
+        if rating2:
+            total2 = sum(rating2.values())
+            if total2 > 0:
+                rating_text2 = f"\n\n📊 Рейтинг собеседника: "
+                for emoji, count in sorted(rating2.items(), key=lambda x: x[1], reverse=True):
+                    rating_text2 += f"{emoji} {count}  "
+                rating_text2 += f"(всего {total2})"
+        
         await bot.send_message(
             partner_id,
-            "✅ Собеседник найден! Можете начинать общение.",
+            f"✅ Собеседник найден!{rating_text2}\n\n"
+            f"Можете начинать общение.",
             reply_markup=chat_kb()
         )
     else:
@@ -392,6 +451,26 @@ async def disconnect_pair(user_id, notify=True):
         del active_chats[user_id]
         if partner_id in active_chats:
             del active_chats[partner_id]
+        
+        # Отправляем реакции обоим
+        try:
+            await bot.send_message(
+                user_id,
+                "👤 Оцените собеседника:",
+                reply_markup=reaction_kb(partner_id)
+            )
+        except:
+            pass
+        
+        try:
+            await bot.send_message(
+                partner_id,
+                "👤 Оцените собеседника:",
+                reply_markup=reaction_kb(user_id)
+            )
+        except:
+            pass
+        
         if notify:
             try:
                 await bot.send_message(partner_id, "❌ Собеседник завершил чат.\n\nЧто дальше?", reply_markup=after_chat_kb())
@@ -399,6 +478,25 @@ async def disconnect_pair(user_id, notify=True):
                 pass
         return partner_id
     return None
+
+@dp.callback_query(F.data.startswith("react:"))
+async def process_reaction(callback: CallbackQuery):
+    parts = callback.data.split(":")
+    reaction = parts[1]
+    rated_id = int(parts[2])
+    user_id = callback.from_user.id
+    
+    add_reaction(rated_id, reaction)
+    
+    try:
+        await callback.message.edit_text(
+            f"✅ Вы поставили реакцию {reaction}\n\n"
+            f"Спасибо за обратную связь!"
+        )
+    except:
+        pass
+    
+    await callback.answer()
 
 @dp.message(F.text == "❌ Завершить чат")
 async def end_chat(message: Message):
@@ -529,7 +627,6 @@ async def cmd_unban(message: Message):
 async def relay_message(message: Message):
     user_id = message.from_user.id
     
-    # Если пользователь в процессе регистрации — не пересылаем
     if user_id in registration_state:
         return
     
@@ -581,4 +678,5 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
