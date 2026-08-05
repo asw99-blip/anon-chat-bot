@@ -12,11 +12,10 @@ from aiogram.types import (
 from aiogram.filters import Command
 
 # ============ КОНФИГУРАЦИЯ ============
-BOT_TOKEN = "8943522365:AAFcdcGGA8FKV3GlOLp7kEk4tyt-Qh96s0c"
+BOT_TOKEN = "ВАШ_НОВЫЙ_ТОКЕН_ЗДЕСЬ"
 ADMIN_ID = 8987146035
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-# Определяем БД: PostgreSQL (Railway) или SQLite (локально)
 if DATABASE_URL:
     import psycopg2
     USE_SQLITE = False
@@ -34,21 +33,25 @@ def get_conn():
 def _init_db():
     conn = get_conn()
     c = conn.cursor()
+    ph = "?" if USE_SQLITE else "%s"
     
     if USE_SQLITE:
-        c.execute('''CREATE TABLE IF NOT EXISTS users (
+        c.execute(f'''CREATE TABLE IF NOT EXISTS users (
             user_id INTEGER PRIMARY KEY, username TEXT, first_name TEXT, joined_at TEXT
         )''')
-        c.execute('''CREATE TABLE IF NOT EXISTS profiles (
+        c.execute(f'''CREATE TABLE IF NOT EXISTS profiles (
             user_id INTEGER PRIMARY KEY, gender TEXT, age INTEGER, registered_at TEXT
         )''')
-        c.execute('''CREATE TABLE IF NOT EXISTS ratings (
+        c.execute(f'''CREATE TABLE IF NOT EXISTS preferences (
+            user_id INTEGER PRIMARY KEY, search_gender TEXT DEFAULT 'all'
+        )''')
+        c.execute(f'''CREATE TABLE IF NOT EXISTS ratings (
             id INTEGER PRIMARY KEY AUTOINCREMENT, rated_user_id INTEGER, reaction TEXT, created_at TEXT
         )''')
-        c.execute('''CREATE TABLE IF NOT EXISTS reports (
+        c.execute(f'''CREATE TABLE IF NOT EXISTS reports (
             id INTEGER PRIMARY KEY AUTOINCREMENT, reporter_id INTEGER, reported_id INTEGER, reason TEXT, created_at TEXT
         )''')
-        c.execute('''CREATE TABLE IF NOT EXISTS bans (
+        c.execute(f'''CREATE TABLE IF NOT EXISTS bans (
             user_id INTEGER PRIMARY KEY, reason TEXT, banned_at TEXT
         )''')
     else:
@@ -57,6 +60,9 @@ def _init_db():
         )''')
         c.execute('''CREATE TABLE IF NOT EXISTS profiles (
             user_id BIGINT PRIMARY KEY, gender TEXT, age INTEGER, registered_at TIMESTAMP
+        )''')
+        c.execute('''CREATE TABLE IF NOT EXISTS preferences (
+            user_id BIGINT PRIMARY KEY, search_gender TEXT DEFAULT 'all'
         )''')
         c.execute('''CREATE TABLE IF NOT EXISTS ratings (
             id SERIAL PRIMARY KEY, rated_user_id BIGINT, reaction TEXT, created_at TIMESTAMP
@@ -87,7 +93,8 @@ def _add_user(user_id, username, first_name):
 def _is_banned(user_id):
     conn = get_conn()
     c = conn.cursor()
-    c.execute("SELECT 1 FROM bans WHERE user_id = {}".format("?" if USE_SQLITE else "%s"), (user_id,))
+    ph = "?" if USE_SQLITE else "%s"
+    c.execute(f"SELECT 1 FROM bans WHERE user_id = {ph}", (user_id,))
     result = c.fetchone()
     conn.close()
     return result is not None
@@ -108,7 +115,8 @@ def _ban_user(user_id, reason=""):
 def _unban_user(user_id):
     conn = get_conn()
     c = conn.cursor()
-    c.execute("DELETE FROM bans WHERE user_id = {}".format("?" if USE_SQLITE else "%s"), (user_id,))
+    ph = "?" if USE_SQLITE else "%s"
+    c.execute(f"DELETE FROM bans WHERE user_id = {ph}", (user_id,))
     conn.commit()
     conn.close()
 
@@ -141,7 +149,8 @@ def _add_reaction(rated_user_id, reaction):
 def _get_user_rating(user_id):
     conn = get_conn()
     c = conn.cursor()
-    c.execute("SELECT reaction, COUNT(*) FROM ratings WHERE rated_user_id = {} GROUP BY reaction".format("?" if USE_SQLITE else "%s"), (user_id,))
+    ph = "?" if USE_SQLITE else "%s"
+    c.execute(f"SELECT reaction, COUNT(*) FROM ratings WHERE rated_user_id = {ph} GROUP BY reaction", (user_id,))
     results = c.fetchall()
     conn.close()
     return {row[0]: row[1] for row in results}
@@ -161,7 +170,8 @@ def _get_stats():
 def _is_registered(user_id):
     conn = get_conn()
     c = conn.cursor()
-    c.execute("SELECT 1 FROM profiles WHERE user_id = {}".format("?" if USE_SQLITE else "%s"), (user_id,))
+    ph = "?" if USE_SQLITE else "%s"
+    c.execute(f"SELECT 1 FROM profiles WHERE user_id = {ph}", (user_id,))
     result = c.fetchone()
     conn.close()
     return result is not None
@@ -179,6 +189,37 @@ def _save_profile(user_id, gender, age):
                   (user_id, gender, age, now))
     conn.commit()
     conn.close()
+
+def _get_profile_gender(user_id):
+    conn = get_conn()
+    c = conn.cursor()
+    ph = "?" if USE_SQLITE else "%s"
+    c.execute(f"SELECT gender FROM profiles WHERE user_id = {ph}", (user_id,))
+    result = c.fetchone()
+    conn.close()
+    return result[0] if result else None
+
+def _save_preference(user_id, search_gender):
+    conn = get_conn()
+    c = conn.cursor()
+    if USE_SQLITE:
+        c.execute("INSERT OR REPLACE INTO preferences (user_id, search_gender) VALUES (?, ?)",
+                  (user_id, search_gender))
+    else:
+        c.execute('''INSERT INTO preferences (user_id, search_gender) VALUES (%s, %s)
+                     ON CONFLICT (user_id) DO UPDATE SET search_gender = EXCLUDED.search_gender''',
+                  (user_id, search_gender))
+    conn.commit()
+    conn.close()
+
+def _get_preference(user_id):
+    conn = get_conn()
+    c = conn.cursor()
+    ph = "?" if USE_SQLITE else "%s"
+    c.execute(f"SELECT search_gender FROM preferences WHERE user_id = {ph}", (user_id,))
+    result = c.fetchone()
+    conn.close()
+    return result[0] if result else 'all'
 
 # ============ ASYNC ОБЁРТКИ ============
 async def init_db():
@@ -214,6 +255,15 @@ async def is_registered(user_id):
 async def save_profile(user_id, gender, age):
     await asyncio.to_thread(_save_profile, user_id, gender, age)
 
+async def get_profile_gender(user_id):
+    return await asyncio.to_thread(_get_profile_gender, user_id)
+
+async def save_preference(user_id, search_gender):
+    await asyncio.to_thread(_save_preference, user_id, search_gender)
+
+async def get_preference(user_id):
+    return await asyncio.to_thread(_get_preference, user_id)
+
 # ============ ХРАНИЛИЩЕ В ПАМЯТИ ============
 waiting_queue = deque()
 active_chats = {}
@@ -226,7 +276,10 @@ _chat_lock = asyncio.Lock()
 # ============ КЛАВИАТУРЫ ============
 def main_kb():
     return ReplyKeyboardMarkup(
-        keyboard=[[KeyboardButton(text="🔍 Найти собеседника")]],
+        keyboard=[
+            [KeyboardButton(text="🔍 Найти собеседника")],
+            [KeyboardButton(text="📋 Меню")]
+        ],
         resize_keyboard=True
     )
 
@@ -243,6 +296,7 @@ def after_chat_kb():
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text="🔍 Найти собеседника")],
+            [KeyboardButton(text="📋 Меню")],
             [KeyboardButton(text="🏠 В меню")]
         ],
         resize_keyboard=True
@@ -273,6 +327,26 @@ def reaction_kb(partner_id):
             ]
         ]
     )
+
+def menu_kb():
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="🔍 Найти собеседника", callback_data="menu_search"),
+             InlineKeyboardButton(text="🆕 Следующий", callback_data="menu_next")],
+            [InlineKeyboardButton(text="🛑 Завершить чат", callback_data="menu_stop"),
+             InlineKeyboardButton(text="👫 Поиск по полу", callback_data="menu_gender")],
+            [InlineKeyboardButton(text="🔗 Моя ссылка", callback_data="menu_link")],
+            [InlineKeyboardButton(text="❌ Закрыть", callback_data="menu_close")]
+        ]
+    )
+
+def gender_filter_kb(current):
+    buttons = []
+    for val, label in [('all', '👫 Все'), ('female', '👩 Только девушки'), ('male', '👨 Только парни')]:
+        mark = "✅ " if current == val else ""
+        buttons.append([InlineKeyboardButton(text=f"{mark}{label}", callback_data=f"pref_gender:{val}")])
+    buttons.append([InlineKeyboardButton(text="❌ Закрыть", callback_data="menu_close")])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 # ============ ИНИЦИАЛИЗАЦИЯ ============
 bot = Bot(token=BOT_TOKEN)
@@ -321,13 +395,10 @@ async def start_registration(message: Message):
 @dp.message(Command("start"))
 async def cmd_start(message: Message):
     user_id = message.from_user.id
-
     if await is_banned(user_id):
         await message.answer("🚫 Вы заблокированы в этом боте.")
         return
-
     await add_user(user_id, message.from_user.username, message.from_user.first_name)
-
     async with _chat_lock:
         if user_id in active_chats:
             await message.answer("Вы уже в чате. Нажмите «Завершить чат» сначала.")
@@ -337,19 +408,11 @@ async def cmd_start(message: Message):
         except ValueError:
             pass
         report_pending.discard(user_id)
-
     if not await is_registered(user_id):
         await start_registration(message)
         return
-
-    await message.answer(
-        "👋 Добро пожаловать в анонимный чат!\n\n"
-        "🔒 Оригинальный и самый популярный Анонимный чат в Телеграме!\n\n"
-        "💬 Общайся анонимно с случайными собеседниками.\n\n"
-        "🔞 Чат строго 18+\n\n"
-        "🔍 Нажмите кнопку ниже, чтобы найти собеседника.",
-        reply_markup=main_kb()
-    )
+    # Приветственное сообщение убрано — просто показываем клавиатуру
+    await message.answer("👇", reply_markup=main_kb())
 
 @dp.callback_query(F.data.startswith("gender_"))
 async def process_gender(callback: CallbackQuery):
@@ -357,16 +420,13 @@ async def process_gender(callback: CallbackQuery):
     if registration_state.get(user_id) != "awaiting_gender":
         await callback.answer()
         return
-
     gender = "female" if callback.data == "gender_female" else "male"
     gender_text = "👩 Девушка" if gender == "female" else "👨 Парень"
     registration_data[user_id] = {"gender": gender}
-
     try:
         await callback.message.delete()
     except Exception:
         pass
-
     registration_state[user_id] = "awaiting_age"
     msg = await bot.send_message(
         user_id,
@@ -394,15 +454,12 @@ async def process_age(message: Message):
     user_id = message.from_user.id
     if registration_state.get(user_id) != "awaiting_age":
         return
-
     age = int(message.text)
     try:
         await message.delete()
     except Exception:
         pass
-
     await clear_registration(user_id)
-
     if age < 18:
         msg = await message.answer(
             "🚫 Доступ запрещён!\n\n"
@@ -410,11 +467,10 @@ async def process_age(message: Message):
             "Вы не можете использовать этого бота."
         )
         return
-
     gender = registration_data.pop(user_id, {}).get("gender", "unknown")
     await save_profile(user_id, gender, age)
+    await save_preference(user_id, 'all')
     registration_state.pop(user_id, None)
-
     gender_text = "👩" if gender == "female" else "👨"
     msg = await message.answer(
         f"✅ Регистрация завершена!\n\n"
@@ -425,18 +481,191 @@ async def process_age(message: Message):
     )
     asyncio.create_task(auto_delete_message(user_id, msg.message_id, 10))
 
-@dp.message(F.text == "🔍 Найти собеседника")
-async def find_partner(message: Message):
-    user_id = message.from_user.id
+# ============ МЕНЮ ============
 
+@dp.message(F.text == "📋 Меню")
+@dp.message(Command("menu"))
+async def show_menu(message: Message):
+    user_id = message.from_user.id
     if not await is_registered(user_id):
         await message.answer("📋 Сначала пройдите регистрацию. Нажмите /start")
         return
+    pref = await get_preference(user_id)
+    pref_text = {"all": "👫 Все", "female": "👩 Только девушки", "male": "👨 Только парни"}.get(pref, "👫 Все")
+    await message.answer(
+        f"📋 Главное меню\n\n"
+        f"👫 Поиск по полу: {pref_text}\n\n"
+        f"🔍 /search — Найти собеседника\n"
+        f"🆕 /next — Следующий собеседник\n"
+        f"🛑 /stop — Завершить диалог\n"
+        f"👫 /pay — Поиск по полу\n"
+        f"🔗 /link — Отправить ссылку на Телеграм\n\n"
+        f"Выберите действие:",
+        reply_markup=menu_kb()
+    )
 
+@dp.callback_query(F.data.startswith("menu_"))
+async def menu_callback(callback: CallbackQuery):
+    user_id = callback.from_user.id
+    action = callback.data.replace("menu_", "")
+    
+    if action == "close":
+        try:
+            await callback.message.delete()
+        except Exception:
+            pass
+        await callback.answer()
+        return
+    
+    if not await is_registered(user_id):
+        await callback.answer("📋 Сначала пройдите регистрацию!")
+        return
+    
+    if action == "search":
+        await callback.answer()
+        try:
+            await callback.message.delete()
+        except Exception:
+            pass
+        class FakeMsg:
+            from_user = callback.from_user
+            chat = callback.message.chat
+            async def answer(self, *a, **k):
+                return await bot.send_message(self.chat.id, *a, **k)
+        await find_partner(FakeMsg())
+    
+    elif action == "next":
+        await callback.answer()
+        try:
+            await callback.message.delete()
+        except Exception:
+            pass
+        class FakeMsg:
+            from_user = callback.from_user
+            chat = callback.message.chat
+            async def answer(self, *a, **k):
+                return await bot.send_message(self.chat.id, *a, **k)
+        await next_partner(FakeMsg())
+    
+    elif action == "stop":
+        await callback.answer()
+        try:
+            await callback.message.delete()
+        except Exception:
+            pass
+        class FakeMsg:
+            from_user = callback.from_user
+            chat = callback.message.chat
+            async def answer(self, *a, **k):
+                return await bot.send_message(self.chat.id, *a, **k)
+        await end_chat(FakeMsg())
+    
+    elif action == "gender":
+        pref = await get_preference(user_id)
+        await callback.message.edit_text(
+            "👫 Настройка поиска по полу:\n\n"
+            "Выберите, кого искать:",
+            reply_markup=gender_filter_kb(pref)
+        )
+        await callback.answer()
+    
+    elif action == "link":
+        await callback.answer()
+        partner_id = active_chats.get(user_id)
+        if not partner_id:
+            await callback.message.edit_text(
+                "❌ Вы не в чате. Начните диалог, чтобы поделиться ссылкой.",
+                reply_markup=menu_kb()
+            )
+            return
+        username = callback.from_user.username
+        if username:
+            try:
+                await bot.send_message(partner_id, f"🔗 Собеседник поделился ссылкой: t.me/{username}")
+            except Exception:
+                pass
+            await callback.message.edit_text(
+                "✅ Ссылка отправлена собеседнику.",
+                reply_markup=menu_kb()
+            )
+        else:
+            await callback.message.edit_text(
+                "❌ У вас нет username. Установите его в настройках Telegram.",
+                reply_markup=menu_kb()
+            )
+
+@dp.callback_query(F.data.startswith("pref_gender:"))
+async def set_gender_pref(callback: CallbackQuery):
+    user_id = callback.from_user.id
+    gender = callback.data.split(":")[1]
+    await save_preference(user_id, gender)
+    pref_text = {"all": "👫 Все", "female": "👩 Только девушки", "male": "👨 Только парни"}.get(gender, "👫 Все")
+    await callback.answer(f"✅ Установлено: {pref_text}")
+    await callback.message.edit_text(
+        "👫 Настройка поиска по полу:\n\n"
+        f"✅ Текущий выбор: {pref_text}\n\n"
+        "Выберите, кого искать:",
+        reply_markup=gender_filter_kb(gender)
+    )
+
+# ============ КОМАНДЫ-МЕНЮ ============
+
+@dp.message(Command("search"))
+async def cmd_search(message: Message):
+    await find_partner(message)
+
+@dp.message(Command("next"))
+async def cmd_next(message: Message):
+    await next_partner(message)
+
+@dp.message(Command("stop"))
+async def cmd_stop(message: Message):
+    await end_chat(message)
+
+@dp.message(Command("pay"))
+async def cmd_pay(message: Message):
+    user_id = message.from_user.id
+    if not await is_registered(user_id):
+        await message.answer("📋 Сначала пройдите регистрацию. Нажмите /start")
+        return
+    pref = await get_preference(user_id)
+    await message.answer(
+        "👫 Настройка поиска по полу:\n\n"
+        "Выберите, кого искать:",
+        reply_markup=gender_filter_kb(pref)
+    )
+
+@dp.message(Command("link"))
+async def cmd_link(message: Message):
+    user_id = message.from_user.id
+    if not await is_registered(user_id):
+        await message.answer("📋 Сначала пройдите регистрацию. Нажмите /start")
+        return
+    partner_id = active_chats.get(user_id)
+    if not partner_id:
+        await message.answer("❌ Вы не в чате. Начните диалог, чтобы поделиться ссылкой.")
+        return
+    username = message.from_user.username
+    if username:
+        try:
+            await bot.send_message(partner_id, f"🔗 Собеседник поделился ссылкой: t.me/{username}")
+        except Exception:
+            pass
+        await message.answer("✅ Ссылка отправлена собеседнику.")
+    else:
+        await message.answer("❌ У вас нет username. Установите его в настройках Telegram.")
+
+# ============ ЧАТ ============
+
+@dp.message(F.text == "🔍 Найти собеседника")
+async def find_partner(message: Message):
+    user_id = message.from_user.id
+    if not await is_registered(user_id):
+        await message.answer("📋 Сначала пройдите регистрацию. Нажмите /start")
+        return
     if await is_banned(user_id):
         await message.answer("🚫 Вы заблокированы.")
         return
-
     async with _chat_lock:
         if user_id in active_chats:
             await message.answer("Вы уже общаетесь. Завершите текущий чат сначала.")
@@ -444,15 +673,22 @@ async def find_partner(message: Message):
         if user_id in waiting_queue:
             await message.answer("Вы уже в очереди. Ожидайте...")
             return
-
+        
         partner_id = None
+        pref = await get_preference(user_id)
+        
         while waiting_queue:
             candidate = waiting_queue.popleft()
             if candidate == user_id:
                 continue
             if await is_banned(candidate) or candidate in active_chats:
                 continue
-
+            
+            if pref != 'all':
+                cand_gender = await get_profile_gender(candidate)
+                if cand_gender != pref:
+                    continue
+            
             rating = await get_user_rating(user_id)
             rating_text = ""
             if rating:
@@ -462,7 +698,7 @@ async def find_partner(message: Message):
                     for emoji, count in sorted(rating.items(), key=lambda x: x[1], reverse=True):
                         rating_text += f"{emoji} {count}  "
                     rating_text += f"(всего {total})"
-
+            
             try:
                 await bot.send_message(
                     candidate,
@@ -471,10 +707,10 @@ async def find_partner(message: Message):
                 )
             except Exception:
                 continue
-
+            
             active_chats[user_id] = candidate
             active_chats[candidate] = user_id
-
+            
             rating = await get_user_rating(candidate)
             rating_text = ""
             if rating:
@@ -484,7 +720,7 @@ async def find_partner(message: Message):
                     for emoji, count in sorted(rating.items(), key=lambda x: x[1], reverse=True):
                         rating_text += f"{emoji} {count}  "
                     rating_text += f"(всего {total})"
-
+            
             try:
                 await message.answer(
                     f"✅ Собеседник найден!{rating_text}\n\n"
@@ -498,7 +734,6 @@ async def find_partner(message: Message):
             except Exception:
                 active_chats.pop(user_id, None)
                 active_chats.pop(candidate, None)
-                waiting_queue.appendleft(candidate)
                 try:
                     await bot.send_message(candidate, "❌ Собеседник недоступен. Попробуйте найти нового.", reply_markup=main_kb())
                 except Exception:
@@ -506,7 +741,7 @@ async def find_partner(message: Message):
                 return
             partner_id = candidate
             break
-
+        
         if not partner_id:
             waiting_queue.append(user_id)
             await message.answer(
@@ -523,21 +758,19 @@ async def disconnect_pair(user_id, notify=True):
         except ValueError:
             pass
         report_pending.discard(user_id)
-
         partner_id = active_chats.get(user_id)
         if partner_id is None:
             return None
-
         active_chats.pop(user_id, None)
         active_chats.pop(partner_id, None)
         report_pending.discard(partner_id)
-
+    
     for uid, other_id in [(user_id, partner_id), (partner_id, user_id)]:
         try:
             await bot.send_message(uid, "👤 Оцените собеседника:", reply_markup=reaction_kb(other_id))
         except Exception:
             pass
-
+    
     if notify and partner_id:
         try:
             await bot.send_message(
@@ -547,7 +780,6 @@ async def disconnect_pair(user_id, notify=True):
             )
         except Exception:
             pass
-
     return partner_id
 
 @dp.callback_query(F.data.startswith("react:"))
@@ -556,15 +788,12 @@ async def process_reaction(callback: CallbackQuery):
     if len(parts) != 3:
         await callback.answer()
         return
-
     reaction = parts[1]
     rated_id = int(parts[2])
     user_id = callback.from_user.id
-
     if user_id == rated_id:
         await callback.answer("❌ Нельзя оценить самого себя!")
         return
-
     await add_reaction(rated_id, reaction)
     try:
         await callback.message.edit_text(
@@ -579,11 +808,9 @@ async def process_reaction(callback: CallbackQuery):
 async def end_chat(message: Message):
     user_id = message.from_user.id
     report_pending.discard(user_id)
-
     async with _chat_lock:
         in_queue = user_id in waiting_queue
         in_chat = user_id in active_chats
-
     if in_queue:
         async with _chat_lock:
             try:
@@ -592,7 +819,6 @@ async def end_chat(message: Message):
                 pass
         await message.answer("❌ Поиск отменён.", reply_markup=main_kb())
         return
-
     if in_chat:
         await disconnect_pair(user_id, notify=True)
         await message.answer("❌ Чат завершён.\n\nЧто дальше?", reply_markup=after_chat_kb())
@@ -602,15 +828,12 @@ async def end_chat(message: Message):
 @dp.message(F.text == "⏭ Следующий собеседник")
 async def next_partner(message: Message):
     user_id = message.from_user.id
-
     if not await is_registered(user_id):
         await message.answer("📋 Сначала пройдите регистрацию. Нажмите /start")
         return
-
     async with _chat_lock:
         in_chat = user_id in active_chats
         in_queue = user_id in waiting_queue
-
     if in_chat:
         await disconnect_pair(user_id, notify=True)
         await message.answer("⏭ Ищем нового собеседника...", reply_markup=main_kb())
@@ -644,7 +867,6 @@ async def go_menu(message: Message):
             pass
         report_pending.discard(user_id)
         in_chat = user_id in active_chats
-
     if in_chat:
         await disconnect_pair(user_id, notify=True)
     await message.answer("Главное меню", reply_markup=main_kb())
@@ -656,12 +878,10 @@ async def cmd_stats(message: Message):
     if message.from_user.id != ADMIN_ID:
         await message.answer("⛔ Эта команда только для администратора.")
         return
-
     total_users, total_bans, total_reports = await get_stats()
     async with _chat_lock:
         chats = len(active_chats) // 2
         queue = len(waiting_queue)
-
     await message.answer(
         f"📊 Статистика:\n\n"
         f"👤 Пользователей: {total_users}\n"
@@ -676,42 +896,28 @@ async def cmd_ban(message: Message):
     if message.from_user.id != ADMIN_ID:
         await message.answer("⛔ Эта команда только для администратора.")
         return
-
     args = message.text.split(maxsplit=2)
     if len(args) < 2:
         await message.answer("Использование: /ban id [причина]")
         return
-
     try:
         user_id = int(args[1])
         reason = args[2] if len(args) > 2 else "Без причины"
-
         if user_id == ADMIN_ID:
             await message.answer("❌ Нельзя забанить администратора!")
             return
-
         await ban_user(user_id, reason)
-
         if user_id in active_chats:
             partner_id = await disconnect_pair(user_id, notify=False)
             if partner_id:
                 try:
-                    await bot.send_message(
-                        partner_id,
-                        "❌ Собеседник был заблокирован администратором.",
-                        reply_markup=main_kb()
-                    )
+                    await bot.send_message(partner_id, "❌ Собеседник был заблокирован администратором.", reply_markup=main_kb())
                 except Exception:
                     pass
             try:
-                await bot.send_message(
-                    user_id,
-                    f"🚫 Вы заблокированы администратором.\nПричина: {reason}",
-                    reply_markup=main_kb()
-                )
+                await bot.send_message(user_id, f"🚫 Вы заблокированы администратором.\nПричина: {reason}", reply_markup=main_kb())
             except Exception:
                 pass
-
         await message.answer(f"🚫 Пользователь {user_id} заблокирован.\nПричина: {reason}")
     except ValueError:
         await message.answer("❌ Неверный ID. Использование: /ban 123456789")
@@ -721,21 +927,15 @@ async def cmd_unban(message: Message):
     if message.from_user.id != ADMIN_ID:
         await message.answer("⛔ Эта команда только для администратора.")
         return
-
     args = message.text.split()
     if len(args) < 2:
         await message.answer("Использование: /unban id")
         return
-
     try:
         user_id = int(args[1])
         await unban_user(user_id)
         try:
-            await bot.send_message(
-                user_id,
-                "✅ Вы были разблокированы администратором.\n"
-                "Можете снова пользоваться ботом."
-            )
+            await bot.send_message(user_id, "✅ Вы были разблокированы администратором.\nМожете снова пользоваться ботом.")
         except Exception:
             pass
         await message.answer(f"✅ Пользователь {user_id} разблокирован.")
@@ -750,14 +950,11 @@ async def cmd_unban(message: Message):
 }))
 async def relay_message(message: Message):
     user_id = message.from_user.id
-
     if user_id in registration_state:
         return
-
     if user_id in report_pending:
         reason = message.text or message.caption or "Медиа-сообщение"
         partner_id = active_chats.get(user_id)
-
         if partner_id:
             await add_report(user_id, partner_id, reason)
             try:
@@ -774,30 +971,23 @@ async def relay_message(message: Message):
             await message.answer("✅ Жалоба отправлена администратору.", reply_markup=chat_kb())
         else:
             await message.answer("❌ Собеседник уже вышел. Жалоба не отправлена.", reply_markup=main_kb())
-
         report_pending.discard(user_id)
         return
-
     if user_id in waiting_queue:
         await message.answer("⏳ Подождите, ищем собеседника...")
         return
-
     if user_id not in active_chats:
         await message.answer("Вы не в чате. Нажмите «Найти собеседника».", reply_markup=main_kb())
         return
-
     if await is_banned(user_id):
         await message.answer("🚫 Вы заблокированы.")
         await disconnect_pair(user_id, notify=False)
         return
-
     partner_id = active_chats[user_id]
-
     if await is_banned(partner_id):
         await disconnect_pair(user_id, notify=False)
         await message.answer("❌ Ваш собеседник был заблокирован.", reply_markup=main_kb())
         return
-
     try:
         await message.copy_to(chat_id=partner_id)
     except Exception as e:
@@ -831,19 +1021,13 @@ async def my_chat_member_handler(update: ChatMemberUpdated):
             if partner_id:
                 active_chats.pop(partner_id, None)
                 report_pending.discard(partner_id)
-
         if partner_id:
             try:
-                await bot.send_message(
-                    partner_id,
-                    "❌ Собеседник покинул чат.",
-                    reply_markup=after_chat_kb()
-                )
+                await bot.send_message(partner_id, "❌ Собеседник покинул чат.", reply_markup=after_chat_kb())
             except Exception:
                 pass
 
 # ============ GRACEFUL SHUTDOWN ============
-
 @dp.shutdown()
 async def on_shutdown():
     logging.info("🔌 Завершение работы...")
@@ -856,11 +1040,7 @@ async def on_shutdown():
             processed.add(pid)
             for target in (uid, pid):
                 try:
-                    await bot.send_message(
-                        target,
-                        "🔌 Бот перезагружается. Чат завершён.",
-                        reply_markup=main_kb()
-                    )
+                    await bot.send_message(target, "🔌 Бот перезагружается. Чат завершён.", reply_markup=main_kb())
                 except Exception:
                     pass
         active_chats.clear()
@@ -869,12 +1049,8 @@ async def on_shutdown():
     await bot.session.close()
 
 # ============ ЗАПУСК ============
-
 async def main():
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    )
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     await init_db()
     logging.info("🚀 Бот запускается...")
     await dp.start_polling(bot)
