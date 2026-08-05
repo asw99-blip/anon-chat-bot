@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import sqlite3
 import os
 from collections import deque
 from datetime import datetime
@@ -13,106 +12,142 @@ from aiogram.types import (
 from aiogram.filters import Command
 
 # ============ КОНФИГУРАЦИЯ ============
-# ВСТАВЬТЕ СЮДА СВОЙ ТОКЕН И ID
 BOT_TOKEN = "8943522365:AAFcdcGGA8FKV3GlOLp7kEk4tyt-Qh96s0c"
 ADMIN_ID = 8987146035
+DATABASE_URL = os.getenv("DATABASE_URL")
 
-DB_PATH = "bot.db"
+# Определяем БД: PostgreSQL (Railway) или SQLite (локально)
+if DATABASE_URL:
+    import psycopg2
+    USE_SQLITE = False
+else:
+    import sqlite3
+    DB_PATH = "bot.db"
+    USE_SQLITE = True
 
 # ============ БАЗА ДАННЫХ ============
+def get_conn():
+    if USE_SQLITE:
+        return sqlite3.connect(DB_PATH)
+    return psycopg2.connect(DATABASE_URL, sslmode='require')
+
 def _init_db():
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_conn()
     c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS users (
-        user_id INTEGER PRIMARY KEY,
-        username TEXT,
-        first_name TEXT,
-        joined_at TEXT
-    )''')
-    c.execute('''CREATE TABLE IF NOT EXISTS profiles (
-        user_id INTEGER PRIMARY KEY,
-        gender TEXT,
-        age INTEGER,
-        registered_at TEXT
-    )''')
-    c.execute('''CREATE TABLE IF NOT EXISTS ratings (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        rated_user_id INTEGER,
-        reaction TEXT,
-        created_at TEXT
-    )''')
-    c.execute('''CREATE TABLE IF NOT EXISTS reports (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        reporter_id INTEGER,
-        reported_id INTEGER,
-        reason TEXT,
-        created_at TEXT
-    )''')
-    c.execute('''CREATE TABLE IF NOT EXISTS bans (
-        user_id INTEGER PRIMARY KEY,
-        reason TEXT,
-        banned_at TEXT
-    )''')
+    
+    if USE_SQLITE:
+        c.execute('''CREATE TABLE IF NOT EXISTS users (
+            user_id INTEGER PRIMARY KEY, username TEXT, first_name TEXT, joined_at TEXT
+        )''')
+        c.execute('''CREATE TABLE IF NOT EXISTS profiles (
+            user_id INTEGER PRIMARY KEY, gender TEXT, age INTEGER, registered_at TEXT
+        )''')
+        c.execute('''CREATE TABLE IF NOT EXISTS ratings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, rated_user_id INTEGER, reaction TEXT, created_at TEXT
+        )''')
+        c.execute('''CREATE TABLE IF NOT EXISTS reports (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, reporter_id INTEGER, reported_id INTEGER, reason TEXT, created_at TEXT
+        )''')
+        c.execute('''CREATE TABLE IF NOT EXISTS bans (
+            user_id INTEGER PRIMARY KEY, reason TEXT, banned_at TEXT
+        )''')
+    else:
+        c.execute('''CREATE TABLE IF NOT EXISTS users (
+            user_id BIGINT PRIMARY KEY, username TEXT, first_name TEXT, joined_at TIMESTAMP
+        )''')
+        c.execute('''CREATE TABLE IF NOT EXISTS profiles (
+            user_id BIGINT PRIMARY KEY, gender TEXT, age INTEGER, registered_at TIMESTAMP
+        )''')
+        c.execute('''CREATE TABLE IF NOT EXISTS ratings (
+            id SERIAL PRIMARY KEY, rated_user_id BIGINT, reaction TEXT, created_at TIMESTAMP
+        )''')
+        c.execute('''CREATE TABLE IF NOT EXISTS reports (
+            id SERIAL PRIMARY KEY, reporter_id BIGINT, reported_id BIGINT, reason TEXT, created_at TIMESTAMP
+        )''')
+        c.execute('''CREATE TABLE IF NOT EXISTS bans (
+            user_id BIGINT PRIMARY KEY, reason TEXT, banned_at TIMESTAMP
+        )''')
+    
     conn.commit()
     conn.close()
 
 def _add_user(user_id, username, first_name):
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_conn()
     c = conn.cursor()
-    c.execute("INSERT OR IGNORE INTO users (user_id, username, first_name, joined_at) VALUES (?, ?, ?, ?)",
-              (user_id, username, first_name, datetime.now().isoformat()))
+    now = datetime.now()
+    if USE_SQLITE:
+        c.execute("INSERT OR IGNORE INTO users (user_id, username, first_name, joined_at) VALUES (?, ?, ?, ?)",
+                  (user_id, username, first_name, now))
+    else:
+        c.execute("INSERT INTO users (user_id, username, first_name, joined_at) VALUES (%s, %s, %s, %s) ON CONFLICT (user_id) DO NOTHING",
+                  (user_id, username, first_name, now))
     conn.commit()
     conn.close()
 
 def _is_banned(user_id):
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_conn()
     c = conn.cursor()
-    c.execute("SELECT 1 FROM bans WHERE user_id = ?", (user_id,))
+    c.execute("SELECT 1 FROM bans WHERE user_id = {}".format("?" if USE_SQLITE else "%s"), (user_id,))
     result = c.fetchone()
     conn.close()
     return result is not None
 
 def _ban_user(user_id, reason=""):
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_conn()
     c = conn.cursor()
-    c.execute("INSERT OR REPLACE INTO bans (user_id, reason, banned_at) VALUES (?, ?, ?)",
-              (user_id, reason, datetime.now().isoformat()))
+    now = datetime.now()
+    if USE_SQLITE:
+        c.execute("INSERT OR REPLACE INTO bans (user_id, reason, banned_at) VALUES (?, ?, ?)", (user_id, reason, now))
+    else:
+        c.execute('''INSERT INTO bans (user_id, reason, banned_at) VALUES (%s, %s, %s)
+                     ON CONFLICT (user_id) DO UPDATE SET reason = EXCLUDED.reason, banned_at = EXCLUDED.banned_at''',
+                  (user_id, reason, now))
     conn.commit()
     conn.close()
 
 def _unban_user(user_id):
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_conn()
     c = conn.cursor()
-    c.execute("DELETE FROM bans WHERE user_id = ?", (user_id,))
+    c.execute("DELETE FROM bans WHERE user_id = {}".format("?" if USE_SQLITE else "%s"), (user_id,))
     conn.commit()
     conn.close()
 
 def _add_report(reporter_id, reported_id, reason=""):
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_conn()
     c = conn.cursor()
-    c.execute("INSERT INTO reports (reporter_id, reported_id, reason, created_at) VALUES (?, ?, ?, ?)",
-              (reporter_id, reported_id, reason, datetime.now().isoformat()))
+    now = datetime.now()
+    if USE_SQLITE:
+        c.execute("INSERT INTO reports (reporter_id, reported_id, reason, created_at) VALUES (?, ?, ?, ?)",
+                  (reporter_id, reported_id, reason, now))
+    else:
+        c.execute("INSERT INTO reports (reporter_id, reported_id, reason, created_at) VALUES (%s, %s, %s, %s)",
+                  (reporter_id, reported_id, reason, now))
     conn.commit()
     conn.close()
 
 def _add_reaction(rated_user_id, reaction):
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_conn()
     c = conn.cursor()
-    c.execute("INSERT INTO ratings (rated_user_id, reaction, created_at) VALUES (?, ?, ?)",
-              (rated_user_id, reaction, datetime.now().isoformat()))
+    now = datetime.now()
+    if USE_SQLITE:
+        c.execute("INSERT INTO ratings (rated_user_id, reaction, created_at) VALUES (?, ?, ?)",
+                  (rated_user_id, reaction, now))
+    else:
+        c.execute("INSERT INTO ratings (rated_user_id, reaction, created_at) VALUES (%s, %s, %s)",
+                  (rated_user_id, reaction, now))
     conn.commit()
     conn.close()
 
 def _get_user_rating(user_id):
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_conn()
     c = conn.cursor()
-    c.execute("SELECT reaction, COUNT(*) FROM ratings WHERE rated_user_id = ? GROUP BY reaction", (user_id,))
+    c.execute("SELECT reaction, COUNT(*) FROM ratings WHERE rated_user_id = {} GROUP BY reaction".format("?" if USE_SQLITE else "%s"), (user_id,))
     results = c.fetchall()
     conn.close()
     return {row[0]: row[1] for row in results}
 
 def _get_stats():
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_conn()
     c = conn.cursor()
     c.execute("SELECT COUNT(*) FROM users")
     total_users = c.fetchone()[0]
@@ -124,18 +159,24 @@ def _get_stats():
     return total_users, total_bans, total_reports
 
 def _is_registered(user_id):
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_conn()
     c = conn.cursor()
-    c.execute("SELECT 1 FROM profiles WHERE user_id = ?", (user_id,))
+    c.execute("SELECT 1 FROM profiles WHERE user_id = {}".format("?" if USE_SQLITE else "%s"), (user_id,))
     result = c.fetchone()
     conn.close()
     return result is not None
 
 def _save_profile(user_id, gender, age):
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_conn()
     c = conn.cursor()
-    c.execute("INSERT OR REPLACE INTO profiles (user_id, gender, age, registered_at) VALUES (?, ?, ?, ?)",
-              (user_id, gender, age, datetime.now().isoformat()))
+    now = datetime.now()
+    if USE_SQLITE:
+        c.execute("INSERT OR REPLACE INTO profiles (user_id, gender, age, registered_at) VALUES (?, ?, ?, ?)",
+                  (user_id, gender, age, now))
+    else:
+        c.execute('''INSERT INTO profiles (user_id, gender, age, registered_at) VALUES (%s, %s, %s, %s)
+                     ON CONFLICT (user_id) DO UPDATE SET gender = EXCLUDED.gender, age = EXCLUDED.age, registered_at = EXCLUDED.registered_at''',
+                  (user_id, gender, age, now))
     conn.commit()
     conn.close()
 
@@ -180,7 +221,6 @@ report_pending = set()
 registration_state = {}
 registration_data = {}
 registration_messages = {}
-
 _chat_lock = asyncio.Lock()
 
 # ============ КЛАВИАТУРЫ ============
