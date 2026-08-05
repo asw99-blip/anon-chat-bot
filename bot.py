@@ -4,7 +4,10 @@ import sqlite3
 import os
 from datetime import datetime
 from aiogram import Bot, Dispatcher, F
-from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import (
+    Message, ReplyKeyboardMarkup, KeyboardButton,
+    InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+)
 from aiogram.filters import Command
 
 # ============ КОНФИГУРАЦИЯ ============
@@ -23,6 +26,13 @@ def init_db():
         username TEXT,
         first_name TEXT,
         joined_at TEXT
+    )''')
+    
+    c.execute('''CREATE TABLE IF NOT EXISTS profiles (
+        user_id INTEGER PRIMARY KEY,
+        gender TEXT,
+        age INTEGER,
+        registered_at TEXT
     )''')
     
     c.execute('''CREATE TABLE IF NOT EXISTS reports (
@@ -93,12 +103,31 @@ def get_stats():
     conn.close()
     return total_users, total_bans, total_reports
 
+def is_registered(user_id):
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT 1 FROM profiles WHERE user_id = ?", (user_id,))
+    result = c.fetchone()
+    conn.close()
+    return result is not None
+
+def save_profile(user_id, gender, age):
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("INSERT OR REPLACE INTO profiles (user_id, gender, age, registered_at) VALUES (?, ?, ?, ?)",
+              (user_id, gender, age, datetime.now().isoformat()))
+    conn.commit()
+    conn.close()
+
 init_db()
 
 # ============ ХРАНИЛИЩЕ В ПАМЯТИ ============
 waiting_queue = set()
 active_chats = {}
 report_pending = {}
+registration_state = {}      # user_id -> "awaiting_gender" / "awaiting_age"
+registration_messages = {}   # user_id -> [message_ids]
+registration_data = {}       # user_id -> {"gender": "male"/"female"}
 
 # ============ КЛАВИАТУРЫ ============
 def main_kb():
@@ -131,11 +160,146 @@ def cancel_kb():
         resize_keyboard=True
     )
 
+def gender_kb():
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="👩 Девушка", callback_data="gender_female")],
+            [InlineKeyboardButton(text="👨 Парень", callback_data="gender_male")]
+        ]
+    )
+
 # ============ ИНИЦИАЛИЗАЦИЯ ============
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-# ============ ОБРАБОТЧИКИ ============
+# ============ РЕГИСТРАЦИЯ ============
+
+async def clear_registration_messages(user_id):
+    for msg_id in registration_messages.get(user_id, []):
+        try:
+            await bot.delete_message(user_id, msg_id)
+        except:
+            pass
+    registration_messages[user_id] = []
+
+async def start_registration(message: Message):
+    user_id = message.from_user.id
+    registration_state[user_id] = "awaiting_gender"
+    registration_messages[user_id] = []
+    registration_data.pop(user_id, None)
+    
+    msg = await message.answer(
+        "📋 Добро пожаловать!\n\n"
+        "Для начала необходимо пройти короткую регистрацию.\n\n"
+        "1️⃣ Выберите ваш пол:",
+        reply_markup=gender_kb()
+    )
+    registration_messages[user_id].append(msg.message_id)
+
+@dp.callback_query(F.data.startswith("gender_"))
+async def process_gender(callback: CallbackQuery):
+    user_id = callback.from_user.id
+    
+    if registration_state.get(user_id) != "awaiting_gender":
+        await callback.answer()
+        return
+    
+    gender = "female" if callback.data == "gender_female" else "male"
+    gender_text = "👩 Девушка" if gender == "female" else "👨 Парень"
+    registration_data[user_id] = {"gender": gender}
+    
+    # Удаляем сообщение с выбором пола
+    try:
+        await callback.message.delete()
+    except:
+        pass
+    
+    registration_state[user_id] = "awaiting_age"
+    
+    msg = await bot.send_message(
+        user_id,
+        f"✅ Пол: {gender_text}\n\n"
+        f"2️⃣ Укажите ваш возраст (цифрами):\n\n"
+        f"🔞 Доступ разрешён только с 18 лет!",
+        reply_markup=cancel_kb()
+    )
+    registration_messages[user_id].append(msg.message_id)
+    await callback.answer()
+
+@dp.message(F.text == "❌ Отмена")
+async def cancel_registration(message: Message):
+    user_id = message.from_user.id
+    
+    try:
+        await message.delete()
+    except:
+        pass
+    
+    await clear_registration_messages(user_id)
+    
+    registration_state.pop(user_id, None)
+    registration_data.pop(user_id, None)
+    registration_messages.pop(user_id, None)
+    
+    msg = await message.answer("❌ Регистрация отменена. Нажмите /start чтобы начать заново.")
+    await asyncio.sleep(5)
+    try:
+        await msg.delete()
+    except:
+        pass
+
+@dp.message(F.text.regexp(r"^\d+$"))
+async def process_age(message: Message):
+    user_id = message.from_user.id
+    
+    if registration_state.get(user_id) != "awaiting_age":
+        return
+    
+    age = int(message.text)
+    
+    try:
+        await message.delete()
+    except:
+        pass
+    
+    await clear_registration_messages(user_id)
+    
+    if age < 18:
+        msg = await message.answer(
+            "🚫 Доступ запрещён!\n\n"
+            f"Вам указано {age} лет. Данный чат строго 18+.\n\n"
+            "Вы не можете использовать этого бота."
+        )
+        registration_state.pop(user_id, None)
+        registration_data.pop(user_id, None)
+        return
+    
+    gender = registration_data.get(user_id, {}).get("gender", "unknown")
+    save_profile(user_id, gender, age)
+    
+    registration_state.pop(user_id, None)
+    registration_data.pop(user_id, None)
+    registration_messages.pop(user_id, None)
+    
+    gender_text = "👩" if gender == "female" else "👨"
+    msg = await message.answer(
+        f"✅ Регистрация завершена!\n\n"
+        f"{gender_text} Пол: {'Девушка' if gender == 'female' else 'Парень'}\n"
+        f"🎂 Возраст: {age}\n\n"
+        f"👋 Добро пожаловать в анонимный чат!\n\n"
+        f"🔒 Оригинальный и самый популярный Анонимный чат в Телеграме!\n\n"
+        f"💬 Общайся анонимно с случайными собеседниками.\n\n"
+        f"🔞 Чат строго 18+\n\n"
+        f"🔍 Нажмите кнопку ниже, чтобы найти собеседника.",
+        reply_markup=main_kb()
+    )
+    await asyncio.sleep(10)
+    try:
+        await msg.delete()
+    except:
+        pass
+
+# ============ ОСНОВНЫЕ ОБРАБОТЧИКИ ============
 
 @dp.message(Command("start"))
 async def cmd_start(message: Message):
@@ -154,6 +318,10 @@ async def cmd_start(message: Message):
     waiting_queue.discard(user_id)
     report_pending.pop(user_id, None)
     
+    if not is_registered(user_id):
+        await start_registration(message)
+        return
+    
     await message.answer(
         "👋 Добро пожаловать в анонимный чат!\n\n"
         "🔒 Оригинальный и самый популярный Анонимный чат в Телеграме!\n\n"
@@ -166,6 +334,10 @@ async def cmd_start(message: Message):
 @dp.message(F.text == "🔍 Найти собеседника")
 async def find_partner(message: Message):
     user_id = message.from_user.id
+    
+    if not is_registered(user_id):
+        await message.answer("📋 Сначала пройдите регистрацию. Нажмите /start")
+        return
     
     if is_banned(user_id):
         await message.answer("🚫 Вы заблокированы.")
@@ -248,6 +420,10 @@ async def end_chat(message: Message):
 async def next_partner(message: Message):
     user_id = message.from_user.id
     
+    if not is_registered(user_id):
+        await message.answer("📋 Сначала пройдите регистрацию. Нажмите /start")
+        return
+    
     if user_id in active_chats:
         await disconnect_pair(user_id, notify=True)
         await message.answer("⏭ Ищем нового собеседника...", reply_markup=main_kb())
@@ -272,15 +448,6 @@ async def report_start(message: Message):
         "Нажмите «Отмена», чтобы отменить.",
         reply_markup=cancel_kb()
     )
-
-@dp.message(F.text == "❌ Отмена")
-async def cancel_report(message: Message):
-    user_id = message.from_user.id
-    if user_id in report_pending:
-        del report_pending[user_id]
-        await message.answer("Жалоба отменена.", reply_markup=chat_kb())
-    else:
-        await message.answer("Вы не в чате.", reply_markup=main_kb())
 
 @dp.message(F.text == "🏠 В меню")
 async def go_menu(message: Message):
@@ -362,6 +529,10 @@ async def cmd_unban(message: Message):
 async def relay_message(message: Message):
     user_id = message.from_user.id
     
+    # Если пользователь в процессе регистрации — не пересылаем
+    if user_id in registration_state:
+        return
+    
     if user_id in report_pending:
         reason = message.text or "Медиа-сообщение"
         partner_id = active_chats.get(user_id)
@@ -410,5 +581,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-
 
