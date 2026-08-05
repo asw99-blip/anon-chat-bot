@@ -13,18 +13,13 @@ from aiogram.types import (
 from aiogram.filters import Command
 
 # ============ КОНФИГУРАЦИЯ ============
-BOT_TOKEN = os.getenv("BOT_TOKEN", "8943522365:AAFcdcGGA8FKV3GlOLp7kEk4tyt-Qh96s0c")
-ADMIN_ID = int(os.getenv("ADMIN_ID", "8987146035"))
-
-if BOT_TOKEN == "8943522365:AAFcdcGGA8FKV3GlOLp7kEk4tyt-Qh96s0c":
-    raise ValueError("❌ Установите BOT_TOKEN в переменных окружения!")
-if not ADMIN_ID:
-    raise ValueError("❌ Установите ADMIN_ID в переменных окружения!")
+# ВСТАВЬТЕ СЮДА СВОЙ ТОКЕН И ID
+BOT_TOKEN = "8943522365:AAFcdcGGA8FKV3GlOLp7kEk4tyt-Qh96s0c"
+ADMIN_ID = 8987146035
 
 DB_PATH = "bot.db"
-MAX_MESSAGE_LENGTH = 4096
 
-# ============ БАЗА ДАННЫХ (синхронные ядра) ============
+# ============ БАЗА ДАННЫХ ============
 def _init_db():
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
@@ -144,7 +139,7 @@ def _save_profile(user_id, gender, age):
     conn.commit()
     conn.close()
 
-# ============ ASYNC ОБЁРТКИ БД ============
+# ============ ASYNC ОБЁРТКИ ============
 async def init_db():
     await asyncio.to_thread(_init_db)
 
@@ -418,7 +413,6 @@ async def find_partner(message: Message):
             if await is_banned(candidate) or candidate in active_chats:
                 continue
 
-            # Сначала проверяем, жив ли кандидат
             rating = await get_user_rating(user_id)
             rating_text = ""
             if rating:
@@ -436,14 +430,11 @@ async def find_partner(message: Message):
                     reply_markup=chat_kb()
                 )
             except Exception:
-                # Кандидат мёртв — пропускаем навсегда
                 continue
 
-            # Кандидат жив. Фиксируем пару.
             active_chats[user_id] = candidate
             active_chats[candidate] = user_id
 
-            # Теперь пишем текущему пользователю
             rating = await get_user_rating(candidate)
             rating_text = ""
             if rating:
@@ -465,7 +456,6 @@ async def find_partner(message: Message):
                     reply_markup=chat_kb()
                 )
             except Exception:
-                # Текущий пользователь мёртв — разрываем и возвращаем кандидата в очередь
                 active_chats.pop(user_id, None)
                 active_chats.pop(candidate, None)
                 waiting_queue.appendleft(candidate)
@@ -502,7 +492,6 @@ async def disconnect_pair(user_id, notify=True):
         active_chats.pop(partner_id, None)
         report_pending.discard(partner_id)
 
-    # Запрос оценки (вне блокировки)
     for uid, other_id in [(user_id, partner_id), (partner_id, user_id)]:
         try:
             await bot.send_message(uid, "👤 Оцените собеседника:", reply_markup=reaction_kb(other_id))
@@ -722,11 +711,9 @@ async def cmd_unban(message: Message):
 async def relay_message(message: Message):
     user_id = message.from_user.id
 
-    # Пропускаем, если пользователь в процессе регистрации
     if user_id in registration_state:
         return
 
-    # Обработка жалобы
     if user_id in report_pending:
         reason = message.text or message.caption or "Медиа-сообщение"
         partner_id = active_chats.get(user_id)
@@ -751,17 +738,14 @@ async def relay_message(message: Message):
         report_pending.discard(user_id)
         return
 
-    # Очередь
     if user_id in waiting_queue:
         await message.answer("⏳ Подождите, ищем собеседника...")
         return
 
-    # Не в чате
     if user_id not in active_chats:
         await message.answer("Вы не в чате. Нажмите «Найти собеседника».", reply_markup=main_kb())
         return
 
-    # Проверка бана
     if await is_banned(user_id):
         await message.answer("🚫 Вы заблокированы.")
         await disconnect_pair(user_id, notify=False)
@@ -769,7 +753,6 @@ async def relay_message(message: Message):
 
     partner_id = active_chats[user_id]
 
-    # Проверка бана партнёра
     if await is_banned(partner_id):
         await disconnect_pair(user_id, notify=False)
         await message.answer("❌ Ваш собеседник был заблокирован.", reply_markup=main_kb())
@@ -787,11 +770,10 @@ async def relay_edit(message: Message):
     user_id = message.from_user.id
     if user_id not in active_chats:
         return
-    partner_id = active_chats[user_id]
     text = message.text or message.caption
     if text:
         try:
-            await bot.send_message(partner_id, f"✏️ {text}")
+            await bot.send_message(active_chats[user_id], f"✏️ {text}")
         except Exception:
             pass
 
@@ -859,4 +841,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-
