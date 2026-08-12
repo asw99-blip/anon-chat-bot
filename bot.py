@@ -12,9 +12,14 @@ from aiogram.types import (
 from aiogram.filters import Command
 
 # ============ КОНФИГУРАЦИЯ ============
-BOT_TOKEN = "8943522365:AAFcdcGGA8FKV3GlOLp7kEk4tyt-Qh96s0c"
-ADMIN_ID = 8987146035
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8943522365:AAFcdcGGA8FKV3GlOLp7kEk4tyt-Qh96s0c")
+ADMIN_ID = int(os.getenv("ADMIN_ID", "8987146035"))
 DATABASE_URL = os.getenv("DATABASE_URL")
+
+if BOT_TOKEN == "8943522365:AAFcdcGGA8FKV3GlOLp7kEk4tyt-Qh96s0c":
+    raise ValueError("❌ Установите BOT_TOKEN в переменных окружения!")
+if not ADMIN_ID:
+    raise ValueError("❌ Установите ADMIN_ID в переменных окружения!")
 
 if DATABASE_URL:
     import psycopg2
@@ -33,25 +38,24 @@ def get_conn():
 def _init_db():
     conn = get_conn()
     c = conn.cursor()
-    ph = "?" if USE_SQLITE else "%s"
     
     if USE_SQLITE:
-        c.execute(f'''CREATE TABLE IF NOT EXISTS users (
+        c.execute('''CREATE TABLE IF NOT EXISTS users (
             user_id INTEGER PRIMARY KEY, username TEXT, first_name TEXT, joined_at TEXT
         )''')
-        c.execute(f'''CREATE TABLE IF NOT EXISTS profiles (
+        c.execute('''CREATE TABLE IF NOT EXISTS profiles (
             user_id INTEGER PRIMARY KEY, gender TEXT, age INTEGER, registered_at TEXT
         )''')
-        c.execute(f'''CREATE TABLE IF NOT EXISTS preferences (
+        c.execute('''CREATE TABLE IF NOT EXISTS preferences (
             user_id INTEGER PRIMARY KEY, search_gender TEXT DEFAULT 'all'
         )''')
-        c.execute(f'''CREATE TABLE IF NOT EXISTS ratings (
+        c.execute('''CREATE TABLE IF NOT EXISTS ratings (
             id INTEGER PRIMARY KEY AUTOINCREMENT, rated_user_id INTEGER, reaction TEXT, created_at TEXT
         )''')
-        c.execute(f'''CREATE TABLE IF NOT EXISTS reports (
+        c.execute('''CREATE TABLE IF NOT EXISTS reports (
             id INTEGER PRIMARY KEY AUTOINCREMENT, reporter_id INTEGER, reported_id INTEGER, reason TEXT, created_at TEXT
         )''')
-        c.execute(f'''CREATE TABLE IF NOT EXISTS bans (
+        c.execute('''CREATE TABLE IF NOT EXISTS bans (
             user_id INTEGER PRIMARY KEY, reason TEXT, banned_at TEXT
         )''')
     else:
@@ -190,6 +194,15 @@ def _save_profile(user_id, gender, age):
     conn.commit()
     conn.close()
 
+def _get_profile(user_id):
+    conn = get_conn()
+    c = conn.cursor()
+    ph = "?" if USE_SQLITE else "%s"
+    c.execute(f"SELECT gender, age FROM profiles WHERE user_id = {ph}", (user_id,))
+    result = c.fetchone()
+    conn.close()
+    return result
+
 def _get_profile_gender(user_id):
     conn = get_conn()
     c = conn.cursor()
@@ -255,6 +268,9 @@ async def is_registered(user_id):
 async def save_profile(user_id, gender, age):
     await asyncio.to_thread(_save_profile, user_id, gender, age)
 
+async def get_profile(user_id):
+    return await asyncio.to_thread(_get_profile, user_id)
+
 async def get_profile_gender(user_id):
     return await asyncio.to_thread(_get_profile_gender, user_id)
 
@@ -273,50 +289,12 @@ registration_data = {}
 registration_messages = {}
 _chat_lock = asyncio.Lock()
 
-# ============ ТЕКСТ ПРАВИЛ ============
-RULES_TEXT = (
-    "📜 <b>Правила использования бота</b>\n\n"
-    "<b>1. Возрастное ограничение</b>\n"
-    "Использование бота разрешено только лицам старше 18 лет. "
-    "Нажимая «Найти собеседника», вы подтверждаете, что вам исполнилось 18 лет.\n\n"
-    "<b>2. Анонимность</b>\n"
-    "Бот не раскрывает личность собеседников. Однако администратор имеет доступ к ID "
-    "пользователей при рассмотрении жалоб. Не публикуйте чужие персональные данные без согласия.\n\n"
-    "<b>3. Запрещённый контент</b>\n"
-    "Категорически запрещено отправлять:\n"
-    "🚫 Детскую порнографию и материалы сексуального характера с участием несовершеннолетних\n"
-    "🚫 Призывы к насилию, терроризму, суициду\n"
-    "🚫 Пропаганду наркотиков и их сбыта\n"
-    "🚫 Доксинг, угрозы, шантаж, вымогательство\n"
-    "🚫 Спам, флуд, рекламу сторонних ресурсов без согласования\n"
-    "🚫 Мошенничество и фишинг\n\n"
-    "<b>4. Порядок общения</b>\n"
-    "• Уважайте собеседника. Оскорбления, дискриминация и троллинг не приветствуются.\n"
-    "• Если собеседник вам неприятен — нажмите «⏭ Следующий собеседник» или «❌ Завершить чат».\n"
-    "• Не пытайтесь деанонимизировать собеседника против его воли.\n\n"
-    "<b>5. Жалобы и модерация</b>\n"
-    "• Кнопка «🚨 Пожаловаться» отправляет жалобу администратору.\n"
-    "• При подтверждении нарушения собеседник получает <b>перманентный бан</b> без предупреждения.\n"
-    "• Ложные жалобы (спам в жалобах) также караются баном.\n"
-    "• Администратор вправе заблокировать любого пользователя без объяснения причин.\n\n"
-    "<b>6. Рейтинг</b>\n"
-    "После завершения чата вы можете поставить реакцию собеседнику. "
-    "Рейтинг формируется из всех реакций и виден при подборе пары. Накрутка рейтинга запрещена.\n\n"
-    "<b>7. Ответственность</b>\n"
-    "• Администрация не несёт ответственности за действия пользователей и содержание их сообщений.\n"
-    "• Бот предоставляется «как есть». Администратор не гарантирует бесперебойную работу.\n"
-    "• В случае технических сбоев переписка не восстанавливается.\n\n"
-    "<b>8. Изменение правил</b>\n"
-    "Администратор вправе изменить правила в любой момент. "
-    "Продолжение использования бота означает согласие с актуальной редакцией."
-)
-
 # ============ КЛАВИАТУРЫ ============
 def main_kb():
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text="🔍 Найти собеседника")],
-            [KeyboardButton(text="📋 Меню")]
+            [KeyboardButton(text="👤 Профиль")]
         ],
         resize_keyboard=True
     )
@@ -334,8 +312,7 @@ def after_chat_kb():
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text="🔍 Найти собеседника")],
-            [KeyboardButton(text="📋 Меню")],
-            [KeyboardButton(text="🏠 В меню")]
+            [KeyboardButton(text="👤 Профиль")]
         ],
         resize_keyboard=True
     )
@@ -366,16 +343,13 @@ def reaction_kb(partner_id):
         ]
     )
 
-def menu_kb():
+def profile_kb():
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="🔍 Найти собеседника", callback_data="menu_search"),
-             InlineKeyboardButton(text="🆕 Следующий", callback_data="menu_next")],
-            [InlineKeyboardButton(text="🛑 Завершить чат", callback_data="menu_stop"),
-             InlineKeyboardButton(text="👫 Поиск по полу", callback_data="menu_gender")],
-            [InlineKeyboardButton(text="🔗 Моя ссылка", callback_data="menu_link")],
-            [InlineKeyboardButton(text="📜 Правила", callback_data="menu_rules")],
-            [InlineKeyboardButton(text="❌ Закрыть", callback_data="menu_close")]
+            [InlineKeyboardButton(text="🔄 Изменить пол", callback_data="profile_edit_gender")],
+            [InlineKeyboardButton(text="🎂 Изменить возраст", callback_data="profile_edit_age")],
+            [InlineKeyboardButton(text="👫 Поиск по полу", callback_data="profile_edit_pref")],
+            [InlineKeyboardButton(text="❌ Закрыть", callback_data="profile_close")]
         ]
     )
 
@@ -384,7 +358,7 @@ def gender_filter_kb(current):
     for val, label in [('all', '👫 Все'), ('female', '👩 Только девушки'), ('male', '👨 Только парни')]:
         mark = "✅ " if current == val else ""
         buttons.append([InlineKeyboardButton(text=f"{mark}{label}", callback_data=f"pref_gender:{val}")])
-    buttons.append([InlineKeyboardButton(text="❌ Закрыть", callback_data="menu_close")])
+    buttons.append([InlineKeyboardButton(text="◀️ Назад", callback_data="profile_back")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 # ============ ИНИЦИАЛИЗАЦИЯ ============
@@ -429,6 +403,24 @@ async def start_registration(message: Message):
     )
     registration_messages[user_id].append(msg.message_id)
 
+async def show_profile_by_id(user_id):
+    profile = await get_profile(user_id)
+    gender = profile[0] if profile else "unknown"
+    age = profile[1] if profile else "?"
+    pref = await get_preference(user_id)
+    
+    gender_map = {"female": "👩 Девушка", "male": "👨 Парень", "unknown": "Не указан"}
+    pref_map = {"all": "👫 Все", "female": "👩 Только девушки", "male": "👨 Только парни"}
+    
+    text = (
+        f"👤 <b>Ваш профиль</b>\n\n"
+        f"🔄 Пол: {gender_map.get(gender, 'Не указан')}\n"
+        f"🎂 Возраст: {age}\n"
+        f"👫 Поиск по полу: {pref_map.get(pref, '👫 Все')}\n\n"
+        f"Выберите, что изменить:"
+    )
+    await bot.send_message(user_id, text, reply_markup=profile_kb(), parse_mode="HTML")
+
 # ============ ОБРАБОТЧИКИ ============
 
 @dp.message(Command("start"))
@@ -451,24 +443,114 @@ async def cmd_start(message: Message):
         await start_registration(message)
         return
     await message.answer(
-        "👋 Добро пожаловать!\n\n"
-        "📜 /rules — правила использования\n\n"
-        "👇 Выберите действие:",
+        "👋 Добро пожаловать в анонимный чат!\n\n"
+        "🔒 Оригинальный и самый популярный Анонимный чат в Телеграме!\n\n"
+        "💬 Общайся анонимно с случайными собеседниками.\n\n"
+        "🔞 Чат строго 18+\n\n"
+        "🔍 Нажмите кнопку ниже, чтобы найти собеседника.\n\n"
+        "📜 /rules — правила использования",
         reply_markup=main_kb()
     )
 
 @dp.message(Command("rules"))
 async def cmd_rules(message: Message):
-    await message.answer(RULES_TEXT, parse_mode="HTML")
+    rules_text = (
+        "📜 <b>Правила использования бота</b>\n\n"
+        "1️⃣ <b>Возраст 18+</b>\n"
+        "Использование разрешено только лицам старше 18 лет.\n\n"
+        "2️⃣ <b>Запрещено:</b>\n"
+        "• Детская порнография\n"
+        "• Призывы к насилию и терроризму\n"
+        "• Пропаганда наркотиков\n"
+        "• Доксинг, угрозы, шантаж\n"
+        "• Спам, мошенничество, фишинг\n\n"
+        "3️⃣ <b>Жалобы</b>\n"
+        "Нажмите 🚨 — жалоба уйдёт админу. "
+        "При подтверждении нарушения — <b>перманентный бан</b>.\n\n"
+        "4️⃣ <b>Ответственность</b>\n"
+        "Администрация не отвечает за действия пользователей. "
+        "Бот предоставляется «как есть».\n\n"
+        "5️⃣ <b>Админ вправе забанить любого пользователя без объяснения причин.</b>"
+    )
+    await message.answer(rules_text, parse_mode="HTML")
+
+@dp.message(F.text == "👤 Профиль")
+@dp.message(Command("profile"))
+async def cmd_profile(message: Message):
+    user_id = message.from_user.id
+    if not await is_registered(user_id):
+        await message.answer("📋 Сначала пройдите регистрацию. Нажмите /start")
+        return
+    await show_profile_by_id(user_id)
+
+@dp.callback_query(F.data == "profile_edit_gender")
+async def profile_edit_gender(callback: CallbackQuery):
+    user_id = callback.from_user.id
+    registration_state[user_id] = "changing_gender"
+    registration_data[user_id] = {"action": "edit_profile"}
+    await callback.message.edit_text("🔄 Выберите новый пол:", reply_markup=gender_kb())
+    await callback.answer()
+
+@dp.callback_query(F.data == "profile_edit_age")
+async def profile_edit_age(callback: CallbackQuery):
+    user_id = callback.from_user.id
+    registration_state[user_id] = "changing_age"
+    registration_data[user_id] = {"action": "edit_profile"}
+    await callback.message.edit_text(
+        "🎂 Введите ваш возраст (цифрами):\n\n🔞 Доступ разрешён только с 18 лет!",
+        reply_markup=cancel_kb()
+    )
+    await callback.answer()
+
+@dp.callback_query(F.data == "profile_edit_pref")
+async def profile_edit_pref(callback: CallbackQuery):
+    user_id = callback.from_user.id
+    pref = await get_preference(user_id)
+    await callback.message.edit_text(
+        "👫 Настройка поиска по полу:\n\nВыберите, кого искать:",
+        reply_markup=gender_filter_kb(pref)
+    )
+    await callback.answer()
+
+@dp.callback_query(F.data == "profile_close")
+async def profile_close(callback: CallbackQuery):
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
+    await callback.answer()
+
+@dp.callback_query(F.data == "profile_back")
+async def profile_back(callback: CallbackQuery):
+    await callback.answer()
+    await show_profile_by_id(callback.from_user.id)
 
 @dp.callback_query(F.data.startswith("gender_"))
 async def process_gender(callback: CallbackQuery):
     user_id = callback.from_user.id
-    if registration_state.get(user_id) != "awaiting_gender":
+    state = registration_state.get(user_id)
+    if state not in ("awaiting_gender", "changing_gender"):
         await callback.answer()
         return
+    
     gender = "female" if callback.data == "gender_female" else "male"
     gender_text = "👩 Девушка" if gender == "female" else "👨 Парень"
+    action = registration_data.get(user_id, {}).get("action")
+    
+    if action == "edit_profile":
+        profile = await get_profile(user_id)
+        age = profile[1] if profile else 18
+        await save_profile(user_id, gender, age)
+        registration_state.pop(user_id, None)
+        registration_data.pop(user_id, None)
+        await callback.answer(f"✅ Пол изменён на {gender_text}")
+        try:
+            await callback.message.delete()
+        except Exception:
+            pass
+        await show_profile_by_id(user_id)
+        return
+    
     registration_data[user_id] = {"gender": gender}
     try:
         await callback.message.delete()
@@ -486,26 +568,54 @@ async def process_gender(callback: CallbackQuery):
     await callback.answer()
 
 @dp.message(F.text == "❌ Отмена")
-async def cancel_registration(message: Message):
+async def cancel_action(message: Message):
     user_id = message.from_user.id
     try:
         await message.delete()
     except Exception:
         pass
-    await clear_registration(user_id)
-    msg = await message.answer("❌ Регистрация отменена. Нажмите /start чтобы начать заново.")
-    asyncio.create_task(auto_delete_message(user_id, msg.message_id, 5))
+    
+    state = registration_state.get(user_id)
+    if state in ("awaiting_gender", "awaiting_age"):
+        await clear_registration(user_id)
+        msg = await message.answer("❌ Регистрация отменена. Нажмите /start чтобы начать заново.")
+        asyncio.create_task(auto_delete_message(user_id, msg.message_id, 5))
+    elif state in ("changing_gender", "changing_age"):
+        registration_state.pop(user_id, None)
+        registration_data.pop(user_id, None)
+        await message.answer("❌ Изменение отменено.", reply_markup=main_kb())
+        await show_profile_by_id(user_id)
+    else:
+        await message.answer("❌ Действие отменено.", reply_markup=main_kb())
 
 @dp.message(F.text.regexp(r"^\d+$"))
 async def process_age(message: Message):
     user_id = message.from_user.id
-    if registration_state.get(user_id) != "awaiting_age":
+    state = registration_state.get(user_id)
+    if state not in ("awaiting_age", "changing_age"):
         return
+    
     age = int(message.text)
     try:
         await message.delete()
     except Exception:
         pass
+    
+    action = registration_data.get(user_id, {}).get("action")
+    
+    if action == "edit_profile":
+        if age < 18:
+            await message.answer("🚫 Возраст должен быть 18+. Попробуйте снова.")
+            return
+        profile = await get_profile(user_id)
+        gender = profile[0] if profile else "unknown"
+        await save_profile(user_id, gender, age)
+        registration_state.pop(user_id, None)
+        registration_data.pop(user_id, None)
+        await message.answer("✅ Возраст обновлён!", reply_markup=main_kb())
+        await show_profile_by_id(user_id)
+        return
+    
     await clear_registration(user_id)
     if age < 18:
         msg = await message.answer(
@@ -514,6 +624,7 @@ async def process_age(message: Message):
             "Вы не можете использовать этого бота."
         )
         return
+    
     gender = registration_data.pop(user_id, {}).get("gender", "unknown")
     await save_profile(user_id, gender, age)
     await save_preference(user_id, 'all')
@@ -528,124 +639,6 @@ async def process_age(message: Message):
     )
     asyncio.create_task(auto_delete_message(user_id, msg.message_id, 10))
 
-# ============ МЕНЮ ============
-
-@dp.message(F.text == "📋 Меню")
-@dp.message(Command("menu"))
-async def show_menu(message: Message):
-    user_id = message.from_user.id
-    if not await is_registered(user_id):
-        await message.answer("📋 Сначала пройдите регистрацию. Нажмите /start")
-        return
-    pref = await get_preference(user_id)
-    pref_text = {"all": "👫 Все", "female": "👩 Только девушки", "male": "👨 Только парни"}.get(pref, "👫 Все")
-    await message.answer(
-        f"📋 Главное меню\n\n"
-        f"👫 Поиск по полу: {pref_text}\n\n"
-        f"🔍 /search — Найти собеседника\n"
-        f"🆕 /next — Следующий собеседник\n"
-        f"🛑 /stop — Завершить диалог\n"
-        f"👫 /pay — Поиск по полу\n"
-        f"🔗 /link — Отправить ссылку на Телеграм\n"
-        f"📜 /rules — Правила использования\n\n"
-        f"Выберите действие:",
-        reply_markup=menu_kb()
-    )
-
-@dp.callback_query(F.data.startswith("menu_"))
-async def menu_callback(callback: CallbackQuery):
-    user_id = callback.from_user.id
-    action = callback.data.replace("menu_", "")
-    
-    if action == "close":
-        try:
-            await callback.message.delete()
-        except Exception:
-            pass
-        await callback.answer()
-        return
-    
-    if not await is_registered(user_id):
-        await callback.answer("📋 Сначала пройдите регистрацию!")
-        return
-    
-    if action == "search":
-        await callback.answer()
-        try:
-            await callback.message.delete()
-        except Exception:
-            pass
-        class FakeMsg:
-            from_user = callback.from_user
-            chat = callback.message.chat
-            async def answer(self, *a, **k):
-                return await bot.send_message(self.chat.id, *a, **k)
-        await find_partner(FakeMsg())
-    
-    elif action == "next":
-        await callback.answer()
-        try:
-            await callback.message.delete()
-        except Exception:
-            pass
-        class FakeMsg:
-            from_user = callback.from_user
-            chat = callback.message.chat
-            async def answer(self, *a, **k):
-                return await bot.send_message(self.chat.id, *a, **k)
-        await next_partner(FakeMsg())
-    
-    elif action == "stop":
-        await callback.answer()
-        try:
-            await callback.message.delete()
-        except Exception:
-            pass
-        class FakeMsg:
-            from_user = callback.from_user
-            chat = callback.message.chat
-            async def answer(self, *a, **k):
-                return await bot.send_message(self.chat.id, *a, **k)
-        await end_chat(FakeMsg())
-    
-    elif action == "gender":
-        pref = await get_preference(user_id)
-        await callback.message.edit_text(
-            "👫 Настройка поиска по полу:\n\n"
-            "Выберите, кого искать:",
-            reply_markup=gender_filter_kb(pref)
-        )
-        await callback.answer()
-    
-    elif action == "link":
-        await callback.answer()
-        partner_id = active_chats.get(user_id)
-        if not partner_id:
-            await callback.message.edit_text(
-                "❌ Вы не в чате. Начните диалог, чтобы поделиться ссылкой.",
-                reply_markup=menu_kb()
-            )
-            return
-        username = callback.from_user.username
-        if username:
-            try:
-                await bot.send_message(partner_id, f"🔗 Собеседник поделился ссылкой: t.me/{username}")
-            except Exception:
-                pass
-            await callback.message.edit_text(
-                "✅ Ссылка отправлена собеседнику.",
-                reply_markup=menu_kb()
-            )
-        else:
-            await callback.message.edit_text(
-                "❌ У вас нет username. Установите его в настройках Telegram.",
-                reply_markup=menu_kb()
-            )
-    
-    elif action == "rules":
-        await callback.message.edit_text(RULES_TEXT, parse_mode="HTML", reply_markup=menu_kb())
-        await callback.answer()
-
 @dp.callback_query(F.data.startswith("pref_gender:"))
 async def set_gender_pref(callback: CallbackQuery):
     user_id = callback.from_user.id
@@ -653,14 +646,9 @@ async def set_gender_pref(callback: CallbackQuery):
     await save_preference(user_id, gender)
     pref_text = {"all": "👫 Все", "female": "👩 Только девушки", "male": "👨 Только парни"}.get(gender, "👫 Все")
     await callback.answer(f"✅ Установлено: {pref_text}")
-    await callback.message.edit_text(
-        "👫 Настройка поиска по полу:\n\n"
-        f"✅ Текущий выбор: {pref_text}\n\n"
-        "Выберите, кого искать:",
-        reply_markup=gender_filter_kb(gender)
-    )
+    await show_profile_by_id(user_id)
 
-# ============ КОМАНДЫ-МЕНЮ ============
+# ============ КОМАНДЫ ============
 
 @dp.message(Command("search"))
 async def cmd_search(message: Message):
@@ -908,20 +896,6 @@ async def report_start(message: Message):
         "Нажмите «Отмена», чтобы отменить.",
         reply_markup=cancel_kb()
     )
-
-@dp.message(F.text == "🏠 В меню")
-async def go_menu(message: Message):
-    user_id = message.from_user.id
-    async with _chat_lock:
-        try:
-            waiting_queue.remove(user_id)
-        except ValueError:
-            pass
-        report_pending.discard(user_id)
-        in_chat = user_id in active_chats
-    if in_chat:
-        await disconnect_pair(user_id, notify=True)
-    await message.answer("Главное меню", reply_markup=main_kb())
 
 # ============ АДМИН-КОМАНДЫ ============
 
