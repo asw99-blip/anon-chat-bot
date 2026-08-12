@@ -12,8 +12,8 @@ from aiogram.types import (
 from aiogram.filters import Command
 
 # ============ КОНФИГУРАЦИЯ ============
-BOT_TOKEN = "8943522365:AAFcdcGGA8FKV3GlOLp7kEk4tyt-Qh96s0c"  
-ADMIN_ID = 8987146035           
+BOT_TOKEN = "8943522365:AAFcdcGGA8FKV3GlOLp7kEk4tyt-Qh96s0c"
+ADMIN_ID = 8987146035
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 if DATABASE_URL:
@@ -24,18 +24,18 @@ else:
     DB_PATH = "bot.db"
     USE_SQLITE = True
 
-# ============ СПРАВОЧНИК ИНТЕРЕСОВ ============
+# ============ ИНТЕРЕСЫ ============
 INTERESTS = {
-    "chat": "💬 Просто поболтать",
-    "games": "🎮 Игры",
-    "music": "🎵 Музыка",
-    "movies": "🎬 Кино/сериалы",
-    "animals": "🐾 Животные",
-    "sport": "⚽ Спорт",
-    "art": "🎨 Творчество",
-    "anime": "🍥 Аниме",
-    "flirt": "💋 Флирт",
-    "rp": "🎭 Ролевые игры"
+    "chat": "Просто поболтать",
+    "games": "Игры",
+    "music": "Музыка",
+    "movies": "Кино/сериалы",
+    "animals": "Животные",
+    "sport": "Спорт",
+    "art": "Творчество",
+    "anime": "Аниме",
+    "flirt": "Флирт",
+    "rp": "Ролевые игры"
 }
 
 # ============ БАЗА ДАННЫХ ============
@@ -47,54 +47,50 @@ def get_conn():
 def _init_db():
     conn = get_conn()
     c = conn.cursor()
-    
     if USE_SQLITE:
-        c.execute('''CREATE TABLE IF NOT EXISTS users (
+        c.execute("""CREATE TABLE IF NOT EXISTS users (
             user_id INTEGER PRIMARY KEY, username TEXT, first_name TEXT, joined_at TEXT
-        )''')
-        c.execute('''CREATE TABLE IF NOT EXISTS profiles (
+        )""")
+        c.execute("""CREATE TABLE IF NOT EXISTS profiles (
             user_id INTEGER PRIMARY KEY, gender TEXT, age INTEGER, registered_at TEXT
-        )''')
-        c.execute('''CREATE TABLE IF NOT EXISTS preferences (
+        )""")
+        c.execute("""CREATE TABLE IF NOT EXISTS preferences (
             user_id INTEGER PRIMARY KEY, search_gender TEXT DEFAULT 'all'
-        )''')
-        c.execute('''CREATE TABLE IF NOT EXISTS ratings (
+        )""")
+        c.execute("""CREATE TABLE IF NOT EXISTS ratings (
             id INTEGER PRIMARY KEY AUTOINCREMENT, rated_user_id INTEGER, reaction TEXT, created_at TEXT
-        )''')
-        c.execute('''CREATE TABLE IF NOT EXISTS reports (
+        )""")
+        c.execute("""CREATE TABLE IF NOT EXISTS reports (
             id INTEGER PRIMARY KEY AUTOINCREMENT, reporter_id INTEGER, reported_id INTEGER, reason TEXT, created_at TEXT
-        )''')
-        c.execute('''CREATE TABLE IF NOT EXISTS bans (
+        )""")
+        c.execute("""CREATE TABLE IF NOT EXISTS bans (
             user_id INTEGER PRIMARY KEY, reason TEXT, banned_at TEXT
-        )''')
-        # === НОВАЯ ТАБЛИЦА: интересы ===
-        c.execute('''CREATE TABLE IF NOT EXISTS interests (
+        )""")
+        c.execute("""CREATE TABLE IF NOT EXISTS interests (
             user_id INTEGER, interest TEXT, PRIMARY KEY (user_id, interest)
-        )''')
+        )""")
     else:
-        c.execute('''CREATE TABLE IF NOT EXISTS users (
+        c.execute("""CREATE TABLE IF NOT EXISTS users (
             user_id BIGINT PRIMARY KEY, username TEXT, first_name TEXT, joined_at TIMESTAMP
-        )''')
-        c.execute('''CREATE TABLE IF NOT EXISTS profiles (
+        )""")
+        c.execute("""CREATE TABLE IF NOT EXISTS profiles (
             user_id BIGINT PRIMARY KEY, gender TEXT, age INTEGER, registered_at TIMESTAMP
-        )''')
-        c.execute('''CREATE TABLE IF NOT EXISTS preferences (
+        )""")
+        c.execute("""CREATE TABLE IF NOT EXISTS preferences (
             user_id BIGINT PRIMARY KEY, search_gender TEXT DEFAULT 'all'
-        )''')
-        c.execute('''CREATE TABLE IF NOT EXISTS ratings (
+        )""")
+        c.execute("""CREATE TABLE IF NOT EXISTS ratings (
             id SERIAL PRIMARY KEY, rated_user_id BIGINT, reaction TEXT, created_at TIMESTAMP
-        )''')
-        c.execute('''CREATE TABLE IF NOT EXISTS reports (
+        )""")
+        c.execute("""CREATE TABLE IF NOT EXISTS reports (
             id SERIAL PRIMARY KEY, reporter_id BIGINT, reported_id BIGINT, reason TEXT, created_at TIMESTAMP
-        )''')
-        c.execute('''CREATE TABLE IF NOT EXISTS bans (
+        )""")
+        c.execute("""CREATE TABLE IF NOT EXISTS bans (
             user_id BIGINT PRIMARY KEY, reason TEXT, banned_at TIMESTAMP
-        )''')
-        # === НОВАЯ ТАБЛИЦА: интересы ===
-        c.execute('''CREATE TABLE IF NOT EXISTS interests (
+        )""")
+        c.execute("""CREATE TABLE IF NOT EXISTS interests (
             user_id BIGINT, interest TEXT, PRIMARY KEY (user_id, interest)
-        )''')
-    
+        )""")
     conn.commit()
     conn.close()
 
@@ -127,8 +123,8 @@ def _ban_user(user_id, reason=""):
     if USE_SQLITE:
         c.execute("INSERT OR REPLACE INTO bans (user_id, reason, banned_at) VALUES (?, ?, ?)", (user_id, reason, now))
     else:
-        c.execute('''INSERT INTO bans (user_id, reason, banned_at) VALUES (%s, %s, %s)
-                     ON CONFLICT (user_id) DO UPDATE SET reason = EXCLUDED.reason, banned_at = EXCLUDED.banned_at''',
+        c.execute("""INSERT INTO bans (user_id, reason, banned_at) VALUES (%s, %s, %s)
+                     ON CONFLICT (user_id) DO UPDATE SET reason = EXCLUDED.reason, banned_at = EXCLUDED.banned_at""",
                   (user_id, reason, now))
     conn.commit()
     conn.close()
@@ -205,8 +201,8 @@ def _save_profile(user_id, gender, age):
         c.execute("INSERT OR REPLACE INTO profiles (user_id, gender, age, registered_at) VALUES (?, ?, ?, ?)",
                   (user_id, gender, age, now))
     else:
-        c.execute('''INSERT INTO profiles (user_id, gender, age, registered_at) VALUES (%s, %s, %s, %s)
-                     ON CONFLICT (user_id) DO UPDATE SET gender = EXCLUDED.gender, age = EXCLUDED.age, registered_at = EXCLUDED.registered_at''',
+        c.execute("""INSERT INTO profiles (user_id, gender, age, registered_at) VALUES (%s, %s, %s, %s)
+                     ON CONFLICT (user_id) DO UPDATE SET gender = EXCLUDED.gender, age = EXCLUDED.age, registered_at = EXCLUDED.registered_at""",
                   (user_id, gender, age, now))
     conn.commit()
     conn.close()
@@ -236,8 +232,8 @@ def _save_preference(user_id, search_gender):
         c.execute("INSERT OR REPLACE INTO preferences (user_id, search_gender) VALUES (?, ?)",
                   (user_id, search_gender))
     else:
-        c.execute('''INSERT INTO preferences (user_id, search_gender) VALUES (%s, %s)
-                     ON CONFLICT (user_id) DO UPDATE SET search_gender = EXCLUDED.search_gender''',
+        c.execute("""INSERT INTO preferences (user_id, search_gender) VALUES (%s, %s)
+                     ON CONFLICT (user_id) DO UPDATE SET search_gender = EXCLUDED.search_gender""",
                   (user_id, search_gender))
     conn.commit()
     conn.close()
@@ -251,15 +247,11 @@ def _get_preference(user_id):
     conn.close()
     return result[0] if result else 'all'
 
-# === НОВЫЕ ФУНКЦИИ ДЛЯ ИНТЕРЕСОВ ===
 def _save_interests(user_id, interests_list):
-    """Сохраняет список интересов пользователя (перезаписывает старые)"""
     conn = get_conn()
     c = conn.cursor()
     ph = "?" if USE_SQLITE else "%s"
-    # Удаляем старые интересы
     c.execute(f"DELETE FROM interests WHERE user_id = {ph}", (user_id,))
-    # Добавляем новые
     for interest in interests_list:
         if USE_SQLITE:
             c.execute("INSERT INTO interests (user_id, interest) VALUES (?, ?)", (user_id, interest))
@@ -269,7 +261,6 @@ def _save_interests(user_id, interests_list):
     conn.close()
 
 def _get_interests(user_id):
-    """Возвращает список интересов пользователя"""
     conn = get_conn()
     c = conn.cursor()
     ph = "?" if USE_SQLITE else "%s"
@@ -277,18 +268,6 @@ def _get_interests(user_id):
     results = c.fetchall()
     conn.close()
     return [row[0] for row in results]
-
-def _get_all_interests():
-    """Возвращает словарь {user_id: [список интересов]} для всех пользователей в очереди"""
-    conn = get_conn()
-    c = conn.cursor()
-    c.execute("SELECT user_id, interest FROM interests")
-    results = c.fetchall()
-    conn.close()
-    interests_map = {}
-    for uid, interest in results:
-        interests_map.setdefault(uid, []).append(interest)
-    return interests_map
 
 # ============ ASYNC ОБЁРТКИ ============
 async def init_db():
@@ -336,17 +315,13 @@ async def save_preference(user_id, search_gender):
 async def get_preference(user_id):
     return await asyncio.to_thread(_get_preference, user_id)
 
-# === НОВЫЕ ASYNC ОБЁРТКИ ===
 async def save_interests(user_id, interests_list):
     await asyncio.to_thread(_save_interests, user_id, interests_list)
 
 async def get_interests(user_id):
     return await asyncio.to_thread(_get_interests, user_id)
 
-async def get_all_interests():
-    return await asyncio.to_thread(_get_all_interests)
-
-# ============ ХРАНИЛИЩЕ В ПАМЯТИ ============
+# ============ ХРАНИЛИЩЕ ============
 waiting_queue = deque()
 active_chats = {}
 report_pending = set()
@@ -359,23 +334,23 @@ _chat_lock = asyncio.Lock()
 def main_kb():
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text="🔍 Найти собеседника")],
-            [KeyboardButton(text="👤 Профиль")]
+            [KeyboardButton(text="Найти собеседника")],
+            [KeyboardButton(text="Профиль")]
         ],
         resize_keyboard=True
     )
 
 def searching_kb():
     return ReplyKeyboardMarkup(
-        keyboard=[[KeyboardButton(text="❌ Отменить поиск")]],
+        keyboard=[[KeyboardButton(text="Отменить поиск")]],
         resize_keyboard=True
     )
 
 def chat_kb():
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text="⏭ Следующий собеседник")],
-            [KeyboardButton(text="🚨 Пожаловаться"), KeyboardButton(text="❌ Завершить чат")]
+            [KeyboardButton(text="Следующий собеседник")],
+            [KeyboardButton(text="Пожаловаться"), KeyboardButton(text="Завершить чат")]
         ],
         resize_keyboard=True
     )
@@ -383,23 +358,23 @@ def chat_kb():
 def after_chat_kb():
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text="🔍 Найти собеседника")],
-            [KeyboardButton(text="👤 Профиль")]
+            [KeyboardButton(text="Найти собеседника")],
+            [KeyboardButton(text="Профиль")]
         ],
         resize_keyboard=True
     )
 
 def cancel_kb():
     return ReplyKeyboardMarkup(
-        keyboard=[[KeyboardButton(text="❌ Отмена")]],
+        keyboard=[[KeyboardButton(text="Отмена")]],
         resize_keyboard=True
     )
 
 def gender_kb():
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="👩 Девушка", callback_data="gender_female")],
-            [InlineKeyboardButton(text="👨 Парень", callback_data="gender_male")]
+            [InlineKeyboardButton(text="Девушка", callback_data="gender_female")],
+            [InlineKeyboardButton(text="Парень", callback_data="gender_male")]
         ]
     )
 
@@ -415,54 +390,45 @@ def reaction_kb(partner_id):
         ]
     )
 
-# === НОВАЯ КЛАВИАТУРА ПРОФИЛЯ ===
 def profile_kb():
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="🔄 Изменить пол", callback_data="profile_edit_gender")],
-            [InlineKeyboardButton(text="🎂 Изменить возраст", callback_data="profile_edit_age")],
-            [InlineKeyboardButton(text="👫 Поиск по полу", callback_data="profile_edit_pref")],
-            [InlineKeyboardButton(text="🎯 Изменить интересы", callback_data="profile_edit_interests")],
-            [InlineKeyboardButton(text="❌ Закрыть", callback_data="profile_close")]
+            [InlineKeyboardButton(text="Изменить пол", callback_data="profile_edit_gender")],
+            [InlineKeyboardButton(text="Изменить возраст", callback_data="profile_edit_age")],
+            [InlineKeyboardButton(text="Поиск по полу", callback_data="profile_edit_pref")],
+            [InlineKeyboardButton(text="Изменить интересы", callback_data="profile_edit_interests")],
+            [InlineKeyboardButton(text="Закрыть", callback_data="profile_close")]
         ]
     )
 
 def gender_filter_kb(current):
     buttons = []
-    for val, label in [('all', '👫 Все'), ('female', '👩 Только девушки'), ('male', '👨 Только парни')]:
-        mark = "✅ " if current == val else ""
+    for val, label in [('all', 'Все'), ('female', 'Только девушки'), ('male', 'Только парни')]:
+        mark = "+ " if current == val else ""
         buttons.append([InlineKeyboardButton(text=f"{mark}{label}", callback_data=f"pref_gender:{val}")])
-    buttons.append([InlineKeyboardButton(text="◀️ Назад", callback_data="profile_back")])
+    buttons.append([InlineKeyboardButton(text="Назад", callback_data="profile_back")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
-# === НОВАЯ КЛАВИАТУРА ИНТЕРЕСОВ (множественный выбор) ===
 def interests_kb(selected=None, is_registration=False):
     if selected is None:
         selected = set()
-    
     buttons = []
     row = []
     for key, label in INTERESTS.items():
-        mark = "✅ " if key in selected else ""
-        row.append(InlineKeyboardButton(
-            text=f"{mark}{label}", 
-            callback_data=f"interest:{key}"
-        ))
+        mark = "+ " if key in selected else ""
+        row.append(InlineKeyboardButton(text=f"{mark}{label}", callback_data=f"interest:{key}"))
         if len(row) == 2:
             buttons.append(row)
             row = []
     if row:
         buttons.append(row)
-    
-    # Кнопка подтверждения
     if is_registration:
-        buttons.append([InlineKeyboardButton(text="✅ Готово, перейти к чату", callback_data="interest_done:reg")])
+        buttons.append([InlineKeyboardButton(text="Готово, перейти к чату", callback_data="interest_done:reg")])
     else:
         buttons.append([
-            InlineKeyboardButton(text="💾 Сохранить", callback_data="interest_done:save"),
-            InlineKeyboardButton(text="◀️ Назад", callback_data="profile_back")
+            InlineKeyboardButton(text="Сохранить", callback_data="interest_done:save"),
+            InlineKeyboardButton(text="Назад", callback_data="profile_back")
         ])
-    
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 # ============ ИНИЦИАЛИЗАЦИЯ ============
@@ -500,52 +466,46 @@ async def start_registration(message: Message):
     registration_messages[user_id] = []
     registration_data.pop(user_id, None)
     msg = await message.answer(
-        "📋 Добро пожаловать!\n\n"
+        "Добро пожаловать!\n\n"
         "Для начала необходимо пройти короткую регистрацию.\n\n"
-        "1️⃣ Выберите ваш пол:",
+        "1. Выберите ваш пол:",
         reply_markup=gender_kb()
     )
     registration_messages[user_id].append(msg.message_id)
 
-# === ОБНОВЛЁННАЯ ФУНКЦИЯ ПРОФИЛЯ ===
 async def show_profile_by_id(user_id):
     profile = await get_profile(user_id)
     gender = profile[0] if profile else "unknown"
     age = profile[1] if profile else "?"
     pref = await get_preference(user_id)
     interests = await get_interests(user_id)
-    
-    gender_map = {"female": "👩 Девушка", "male": "👨 Парень", "unknown": "Не указан"}
-    pref_map = {"all": "👫 Все", "female": "👩 Только девушки", "male": "👨 Только парни"}
-    
-    # Формируем строку интересов
+    gender_map = {"female": "Девушка", "male": "Парень", "unknown": "Не указан"}
+    pref_map = {"all": "Все", "female": "Только девушки", "male": "Только парни"}
     if interests:
         interests_text = ", ".join([INTERESTS.get(i, i) for i in interests])
     else:
         interests_text = "Не указаны"
-    
     text = (
-        f"👤 <b>Ваш профиль</b>\n\n"
-        f"🔄 Пол: {gender_map.get(gender, 'Не указан')}\n"
-        f"🎂 Возраст: {age}\n"
-        f"👫 Поиск по полу: {pref_map.get(pref, '👫 Все')}\n"
-        f"🎯 Интересы: {interests_text}\n\n"
+        f"<b>Ваш профиль</b>\n\n"
+        f"Пол: {gender_map.get(gender, 'Не указан')}\n"
+        f"Возраст: {age}\n"
+        f"Поиск по полу: {pref_map.get(pref, 'Все')}\n"
+        f"Интересы: {interests_text}\n\n"
         f"Выберите, что изменить:"
     )
     await bot.send_message(user_id, text, reply_markup=profile_kb(), parse_mode="HTML")
 
 # ============ ОБРАБОТЧИКИ ============
-
 @dp.message(Command("start"))
 async def cmd_start(message: Message):
     user_id = message.from_user.id
     if await is_banned(user_id):
-        await message.answer("🚫 Вы заблокированы в этом боте.")
+        await message.answer("Вы заблокированы в этом боте.")
         return
     await add_user(user_id, message.from_user.username, message.from_user.first_name)
     async with _chat_lock:
         if user_id in active_chats:
-            await message.answer("Вы уже в чате. Нажмите «Завершить чат» сначала.")
+            await message.answer("Вы уже в чате. Нажмите Завершить чат сначала.")
             return
         try:
             waiting_queue.remove(user_id)
@@ -556,43 +516,43 @@ async def cmd_start(message: Message):
         await start_registration(message)
         return
     await message.answer(
-        "👋 Добро пожаловать в анонимный чат!\n\n"
-        "🔒 Оригинальный и самый популярный Анонимный чат в Телеграме!\n\n"
-        "💬 Общайся анонимно с случайными собеседниками.\n\n"
-        "🔞 Чат строго 18+\n\n"
-        "🔍 Нажмите кнопку ниже, чтобы найти собеседника.\n\n"
-        "📜 /rules — правила использования",
+        "Добро пожаловать в анонимный чат!\n\n"
+        "Оригинальный и самый популярный Анонимный чат в Телеграме!\n\n"
+        "Общайся анонимно с случайными собеседниками.\n\n"
+        "Чат строго 18+\n\n"
+        "Нажмите кнопку ниже, чтобы найти собеседника.\n\n"
+        "/rules — правила использования",
         reply_markup=main_kb()
     )
 
 @dp.message(Command("rules"))
 async def cmd_rules(message: Message):
     rules_text = (
-        "📜 <b>Правила использования бота</b>\n\n"
-        "1️⃣ <b>Возраст 18+</b>\n"
+        "<b>Правила использования бота</b>\n\n"
+        "1. <b>Возраст 18+</b>\n"
         "Использование разрешено только лицам старше 18 лет.\n\n"
-        "2️⃣ <b>Запрещено:</b>\n"
-        "• Детская порнография\n"
-        "• Призывы к насилию и терроризму\n"
-        "• Пропаганда наркотиков\n"
-        "• Доксинг, угрозы, шантаж\n"
-        "• Спам, мошенничество, фишинг\n\n"
-        "3️⃣ <b>Жалобы</b>\n"
-        "Нажмите 🚨 — жалоба уйдёт админу. "
+        "2. <b>Запрещено:</b>\n"
+        "- Детская порнография\n"
+        "- Призывы к насилию и терроризму\n"
+        "- Пропаганда наркотиков\n"
+        "- Доксинг, угрозы, шантаж\n"
+        "- Спам, мошенничество, фишинг\n\n"
+        "3. <b>Жалобы</b>\n"
+        "Нажмите кнопку Пожаловаться — жалоба уйдет админу. "
         "При подтверждении нарушения — <b>перманентный бан</b>.\n\n"
-        "4️⃣ <b>Ответственность</b>\n"
+        "4. <b>Ответственность</b>\n"
         "Администрация не отвечает за действия пользователей. "
-        "Бот предоставляется «как есть».\n\n"
-        "5️⃣ <b>Админ вправе забанить любого пользователя без объяснения причин.</b>"
+        "Бот предоставляется как есть.\n\n"
+        "5. <b>Админ вправе забанить любого пользователя без объяснения причин.</b>"
     )
     await message.answer(rules_text, parse_mode="HTML")
 
-@dp.message(F.text == "👤 Профиль")
+@dp.message(F.text == "Профиль")
 @dp.message(Command("profile"))
 async def cmd_profile(message: Message):
     user_id = message.from_user.id
     if not await is_registered(user_id):
-        await message.answer("📋 Сначала пройдите регистрацию. Нажмите /start")
+        await message.answer("Сначала пройдите регистрацию. Нажмите /start")
         return
     await show_profile_by_id(user_id)
 
@@ -601,7 +561,7 @@ async def profile_edit_gender(callback: CallbackQuery):
     user_id = callback.from_user.id
     registration_state[user_id] = "changing_gender"
     registration_data[user_id] = {"action": "edit_profile"}
-    await callback.message.edit_text("🔄 Выберите новый пол:", reply_markup=gender_kb())
+    await callback.message.edit_text("Выберите новый пол:", reply_markup=gender_kb())
     await callback.answer()
 
 @dp.callback_query(F.data == "profile_edit_age")
@@ -610,7 +570,7 @@ async def profile_edit_age(callback: CallbackQuery):
     registration_state[user_id] = "changing_age"
     registration_data[user_id] = {"action": "edit_profile"}
     await callback.message.edit_text(
-        "🎂 Введите ваш возраст (цифрами):\n\n🔞 Доступ разрешён только с 18 лет!",
+        "Введите ваш возраст (цифрами):\n\nДоступ разрешен только с 18 лет!",
         reply_markup=cancel_kb()
     )
     await callback.answer()
@@ -620,12 +580,11 @@ async def profile_edit_pref(callback: CallbackQuery):
     user_id = callback.from_user.id
     pref = await get_preference(user_id)
     await callback.message.edit_text(
-        "👫 Настройка поиска по полу:\n\nВыберите, кого искать:",
+        "Настройка поиска по полу:\n\nВыберите, кого искать:",
         reply_markup=gender_filter_kb(pref)
     )
     await callback.answer()
 
-# === НОВЫЙ ОБРАБОТЧИК: редактирование интересов ===
 @dp.callback_query(F.data == "profile_edit_interests")
 async def profile_edit_interests(callback: CallbackQuery):
     user_id = callback.from_user.id
@@ -633,7 +592,7 @@ async def profile_edit_interests(callback: CallbackQuery):
     registration_state[user_id] = "changing_interests"
     registration_data[user_id] = {"action": "edit_profile", "selected_interests": set(current_interests)}
     await callback.message.edit_text(
-        "🎯 Выберите ваши интересы (можно несколько):\n\n"
+        "Выберите ваши интересы (можно несколько):\n\n"
         "Нажмите на интерес, чтобы выбрать/убрать его.",
         reply_markup=interests_kb(selected=set(current_interests), is_registration=False)
     )
@@ -650,7 +609,6 @@ async def profile_close(callback: CallbackQuery):
 @dp.callback_query(F.data == "profile_back")
 async def profile_back(callback: CallbackQuery):
     await callback.answer()
-    # Очищаем состояние редактирования
     registration_state.pop(callback.from_user.id, None)
     registration_data.pop(callback.from_user.id, None)
     await show_profile_by_id(callback.from_user.id)
@@ -662,25 +620,22 @@ async def process_gender(callback: CallbackQuery):
     if state not in ("awaiting_gender", "changing_gender"):
         await callback.answer()
         return
-    
     gender = "female" if callback.data == "gender_female" else "male"
-    gender_text = "👩 Девушка" if gender == "female" else "👨 Парень"
+    gender_text = "Девушка" if gender == "female" else "Парень"
     action = registration_data.get(user_id, {}).get("action")
-    
     if action == "edit_profile":
         profile = await get_profile(user_id)
         age = profile[1] if profile else 18
         await save_profile(user_id, gender, age)
         registration_state.pop(user_id, None)
         registration_data.pop(user_id, None)
-        await callback.answer(f"✅ Пол изменён на {gender_text}")
+        await callback.answer(f"Пол изменен на {gender_text}")
         try:
             await callback.message.delete()
         except Exception:
             pass
         await show_profile_by_id(user_id)
         return
-    
     registration_data[user_id] = {"gender": gender}
     try:
         await callback.message.delete()
@@ -689,34 +644,33 @@ async def process_gender(callback: CallbackQuery):
     registration_state[user_id] = "awaiting_age"
     msg = await bot.send_message(
         user_id,
-        f"✅ Пол: {gender_text}\n\n"
-        f"2️⃣ Укажите ваш возраст (цифрами):\n\n"
-        f"🔞 Доступ разрешён только с 18 лет!",
+        f"Пол: {gender_text}\n\n"
+        f"2. Укажите ваш возраст (цифрами):\n\n"
+        f"Доступ разрешен только с 18 лет!",
         reply_markup=cancel_kb()
     )
     registration_messages[user_id].append(msg.message_id)
     await callback.answer()
 
-@dp.message(F.text == "❌ Отмена")
+@dp.message(F.text == "Отмена")
 async def cancel_action(message: Message):
     user_id = message.from_user.id
     try:
         await message.delete()
     except Exception:
         pass
-    
     state = registration_state.get(user_id)
     if state in ("awaiting_gender", "awaiting_age", "awaiting_interests"):
         await clear_registration(user_id)
-        msg = await message.answer("❌ Регистрация отменена. Нажмите /start чтобы начать заново.")
+        msg = await message.answer("Регистрация отменена. Нажмите /start чтобы начать заново.")
         asyncio.create_task(auto_delete_message(user_id, msg.message_id, 5))
     elif state in ("changing_gender", "changing_age", "changing_interests"):
         registration_state.pop(user_id, None)
         registration_data.pop(user_id, None)
-        await message.answer("❌ Изменение отменено.", reply_markup=main_kb())
+        await message.answer("Изменение отменено.", reply_markup=main_kb())
         await show_profile_by_id(user_id)
     else:
-        await message.answer("❌ Действие отменено.", reply_markup=main_kb())
+        await message.answer("Действие отменено.", reply_markup=main_kb())
 
 @dp.message(F.text.regexp(r"^\d+$"))
 async def process_age(message: Message):
@@ -724,56 +678,47 @@ async def process_age(message: Message):
     state = registration_state.get(user_id)
     if state not in ("awaiting_age", "changing_age"):
         return
-    
     age = int(message.text)
     try:
         await message.delete()
     except Exception:
         pass
-    
     action = registration_data.get(user_id, {}).get("action")
-    
     if action == "edit_profile":
         if age < 18:
-            await message.answer("🚫 Возраст должен быть 18+. Попробуйте снова.")
+            await message.answer("Возраст должен быть 18+. Попробуйте снова.")
             return
         profile = await get_profile(user_id)
         gender = profile[0] if profile else "unknown"
         await save_profile(user_id, gender, age)
         registration_state.pop(user_id, None)
         registration_data.pop(user_id, None)
-        await message.answer("✅ Возраст обновлён!", reply_markup=main_kb())
+        await message.answer("Возраст обновлен!", reply_markup=main_kb())
         await show_profile_by_id(user_id)
         return
-    
     await clear_registration(user_id)
     if age < 18:
-        msg = await message.answer(
-            "🚫 Доступ запрещён!\n\n"
+        await message.answer(
+            "Доступ запрещен!\n\n"
             f"Вам указано {age} лет. Данный чат строго 18+.\n\n"
             "Вы не можете использовать этого бота."
         )
         return
-    
     gender = registration_data.pop(user_id, {}).get("gender", "unknown")
     await save_profile(user_id, gender, age)
     await save_preference(user_id, 'all')
     registration_state.pop(user_id, None)
-    
-    # === НОВЫЙ ШАГ: переход к выбору интересов ===
     registration_state[user_id] = "awaiting_interests"
     registration_data[user_id] = {"gender": gender, "age": age, "selected_interests": set()}
-    gender_text = "👩" if gender == "female" else "👨"
     msg = await message.answer(
-        f"✅ Пол: {'Девушка' if gender == 'female' else 'Парень'}\n"
-        f"🎂 Возраст: {age}\n\n"
-        f"3️⃣ Выберите ваши интересы (можно несколько):\n\n"
+        f"Пол: {'Девушка' if gender == 'female' else 'Парень'}\n"
+        f"Возраст: {age}\n\n"
+        f"3. Выберите ваши интересы (можно несколько):\n\n"
         f"Это поможет найти собеседника со схожими увлечениями.",
         reply_markup=interests_kb(selected=set(), is_registration=True)
     )
     registration_messages[user_id] = [msg.message_id]
 
-# === НОВЫЕ ОБРАБОТЧИКИ ИНТЕРЕСОВ ===
 @dp.callback_query(F.data.startswith("interest:"))
 async def process_interest_toggle(callback: CallbackQuery):
     user_id = callback.from_user.id
@@ -781,20 +726,15 @@ async def process_interest_toggle(callback: CallbackQuery):
     if state not in ("awaiting_interests", "changing_interests"):
         await callback.answer()
         return
-    
     interest_key = callback.data.split(":")[1]
     data = registration_data.get(user_id, {})
     selected = data.get("selected_interests", set())
-    
-    # Переключаем выбор
     if interest_key in selected:
         selected.discard(interest_key)
     else:
         selected.add(interest_key)
-    
     data["selected_interests"] = selected
     registration_data[user_id] = data
-    
     is_reg = state == "awaiting_interests"
     await callback.message.edit_reply_markup(reply_markup=interests_kb(selected=selected, is_registration=is_reg))
     await callback.answer()
@@ -806,38 +746,31 @@ async def process_interests_done(callback: CallbackQuery):
     if state not in ("awaiting_interests", "changing_interests"):
         await callback.answer()
         return
-    
     mode = callback.data.split(":")[1]
     selected = registration_data.get(user_id, {}).get("selected_interests", set())
-    
-    # Если ничего не выбрано — выбираем "просто поболтать" по умолчанию
     if not selected:
         selected = {"chat"}
-    
     await save_interests(user_id, list(selected))
-    
     if mode == "reg":
-        # Завершение регистрации
         await clear_registration(user_id)
         interests_text = ", ".join([INTERESTS.get(i, i) for i in selected])
         await callback.message.edit_text(
-            f"✅ Регистрация завершена!\n\n"
-            f"🎯 Ваши интересы: {interests_text}\n\n"
-            f"🔍 Нажмите кнопку ниже, чтобы найти собеседника.",
+            f"Регистрация завершена!\n\n"
+            f"Ваши интересы: {interests_text}\n\n"
+            f"Нажмите кнопку ниже, чтобы найти собеседника.",
             reply_markup=None
         )
         msg = await bot.send_message(
             user_id,
-            "👋 Добро пожаловать в анонимный чат!\n\n"
-            "🔍 Нажмите кнопку ниже, чтобы найти собеседника.",
+            "Добро пожаловать в анонимный чат!\n\n"
+            "Нажмите кнопку ниже, чтобы найти собеседника.",
             reply_markup=main_kb()
         )
         asyncio.create_task(auto_delete_message(user_id, msg.message_id, 10))
     else:
-        # Сохранение в профиле
         registration_state.pop(user_id, None)
         registration_data.pop(user_id, None)
-        await callback.answer("✅ Интересы сохранены!")
+        await callback.answer("Интересы сохранены!")
         try:
             await callback.message.delete()
         except Exception:
@@ -849,12 +782,11 @@ async def set_gender_pref(callback: CallbackQuery):
     user_id = callback.from_user.id
     gender = callback.data.split(":")[1]
     await save_preference(user_id, gender)
-    pref_text = {"all": "👫 Все", "female": "👩 Только девушки", "male": "👨 Только парни"}.get(gender, "👫 Все")
-    await callback.answer(f"✅ Установлено: {pref_text}")
+    pref_text = {"all": "Все", "female": "Только девушки", "male": "Только парни"}.get(gender, "Все")
+    await callback.answer(f"Установлено: {pref_text}")
     await show_profile_by_id(user_id)
 
 # ============ КОМАНДЫ ============
-
 @dp.message(Command("search"))
 async def cmd_search(message: Message):
     await find_partner(message)
@@ -867,49 +799,63 @@ async def cmd_next(message: Message):
 async def cmd_stop(message: Message):
     await end_chat(message)
 
-@dp.message(Command("pay"))
-async def cmd_pay(message: Message):
+@dp.message(Command("filter"))
+async def cmd_filter(message: Message):
     user_id = message.from_user.id
     if not await is_registered(user_id):
-        await message.answer("📋 Сначала пройдите регистрацию. Нажмите /start")
+        await message.answer("Сначала пройдите регистрацию. Нажмите /start")
         return
     pref = await get_preference(user_id)
     await message.answer(
-        "👫 Настройка поиска по полу:\n\n"
+        "Настройка поиска по полу:\n\n"
         "Выберите, кого искать:",
         reply_markup=gender_filter_kb(pref)
+    )
+
+@dp.message(Command("interests"))
+async def cmd_interests(message: Message):
+    user_id = message.from_user.id
+    if not await is_registered(user_id):
+        await message.answer("Сначала пройдите регистрацию. Нажмите /start")
+        return
+    current_interests = await get_interests(user_id)
+    registration_state[user_id] = "changing_interests"
+    registration_data[user_id] = {"action": "edit_profile", "selected_interests": set(current_interests)}
+    await message.answer(
+        "Выберите ваши интересы (можно несколько):\n\n"
+        "Нажмите на интерес, чтобы выбрать/убрать его.",
+        reply_markup=interests_kb(selected=set(current_interests), is_registration=False)
     )
 
 @dp.message(Command("link"))
 async def cmd_link(message: Message):
     user_id = message.from_user.id
     if not await is_registered(user_id):
-        await message.answer("📋 Сначала пройдите регистрацию. Нажмите /start")
+        await message.answer("Сначала пройдите регистрацию. Нажмите /start")
         return
     partner_id = active_chats.get(user_id)
     if not partner_id:
-        await message.answer("❌ Вы не в чате. Начните диалог, чтобы поделиться ссылкой.")
+        await message.answer("Вы не в чате. Начните диалог, чтобы поделиться ссылкой.")
         return
     username = message.from_user.username
     if username:
         try:
-            await bot.send_message(partner_id, f"🔗 Собеседник поделился ссылкой: t.me/{username}")
+            await bot.send_message(partner_id, f"Собеседник поделился ссылкой: t.me/{username}")
         except Exception:
             pass
-        await message.answer("✅ Ссылка отправлена собеседнику.")
+        await message.answer("Ссылка отправлена собеседнику.")
     else:
-        await message.answer("❌ У вас нет username. Установите его в настройках Telegram.")
+        await message.answer("У вас нет username. Установите его в настройках Telegram.")
 
 # ============ ЧАТ ============
-
-@dp.message(F.text == "🔍 Найти собеседника")
+@dp.message(F.text == "Найти собеседника")
 async def find_partner(message: Message):
     user_id = message.from_user.id
     if not await is_registered(user_id):
-        await message.answer("📋 Сначала пройдите регистрацию. Нажмите /start")
+        await message.answer("Сначала пройдите регистрацию. Нажмите /start")
         return
     if await is_banned(user_id):
-        await message.answer("🚫 Вы заблокированы.")
+        await message.answer("Вы заблокированы.")
         return
     async with _chat_lock:
         if user_id in active_chats:
@@ -918,36 +864,25 @@ async def find_partner(message: Message):
         if user_id in waiting_queue:
             await message.answer("Вы уже в очереди. Ожидайте...")
             return
-        
         partner_id = None
         pref = await get_preference(user_id)
         my_interests = set(await get_interests(user_id))
-        
-        # === УЛУЧШЕННЫЙ ПОИСК С УЧЁТОМ ИНТЕРЕСОВ ===
-        # Сначала ищем по совпадающим интересам, потом без фильтра
         best_candidate = None
         best_match_score = -1
-        
         candidates_to_keep = deque()
-        
         while waiting_queue:
             candidate = waiting_queue.popleft()
             if candidate == user_id:
                 continue
             if await is_banned(candidate) or candidate in active_chats:
                 continue
-            
-            # Проверка по полу
             if pref != 'all':
                 cand_gender = await get_profile_gender(candidate)
                 if cand_gender != pref:
                     candidates_to_keep.append(candidate)
                     continue
-            
-            # Подсчёт совпадения интересов
             cand_interests = set(await get_interests(candidate))
             match_score = len(my_interests & cand_interests) if my_interests else 0
-            
             if match_score > best_match_score:
                 if best_candidate is not None:
                     candidates_to_keep.append(best_candidate)
@@ -955,90 +890,75 @@ async def find_partner(message: Message):
                 best_match_score = match_score
             else:
                 candidates_to_keep.append(candidate)
-        
-        # Возвращаем несовпавших кандидатов в очередь
         for c in candidates_to_keep:
             waiting_queue.append(c)
-        
         partner_id = best_candidate
-        
         if partner_id:
-            # Формируем информацию об интересах собеседника
             partner_interests = await get_interests(partner_id)
             interests_text = ""
             if partner_interests:
-                interests_text = "\n\n🎯 Интересы собеседника: " + ", ".join([INTERESTS.get(i, i) for i in partner_interests])
-            
+                interests_text = "\n\nИнтересы собеседника: " + ", ".join([INTERESTS.get(i, i) for i in partner_interests])
             rating = await get_user_rating(partner_id)
             rating_text = ""
             if rating:
                 total = sum(rating.values())
                 if total > 0:
-                    rating_text = f"\n\n📊 Рейтинг собеседника: "
+                    rating_text = "\n\nРейтинг собеседника: "
                     for emoji, count in sorted(rating.items(), key=lambda x: x[1], reverse=True):
                         rating_text += f"{emoji} {count}  "
                     rating_text += f"(всего {total})"
-            
             try:
                 await bot.send_message(
                     partner_id,
-                    f"✅ Собеседник найден!{rating_text}{interests_text}\n\nМожете начинать общение.",
+                    f"Собеседник найден!{rating_text}{interests_text}\n\nМожете начинать общение.",
                     reply_markup=chat_kb()
                 )
             except Exception:
-                # Если не удалось отправить — возвращаем в очередь
                 waiting_queue.append(partner_id)
                 partner_id = None
-            
             if partner_id:
                 active_chats[user_id] = partner_id
                 active_chats[partner_id] = user_id
-                
-                # Показываем свои интересы (если есть совпадения — подсвечиваем)
                 my_interests_list = await get_interests(user_id)
                 common = set(my_interests_list) & set(partner_interests) if partner_interests else set()
+                common_text = ""
                 if common:
-                    common_text = "\n\n🔥 Общие интересы: " + ", ".join([INTERESTS.get(i, i) for i in common])
-                else:
-                    common_text = ""
-                
+                    common_text = "\n\nОбщие интересы: " + ", ".join([INTERESTS.get(i, i) for i in common])
                 rating = await get_user_rating(user_id)
                 rating_text = ""
                 if rating:
                     total = sum(rating.values())
                     if total > 0:
-                        rating_text = f"\n\n📊 Рейтинг собеседника: "
+                        rating_text = "\n\nРейтинг собеседника: "
                         for emoji, count in sorted(rating.items(), key=lambda x: x[1], reverse=True):
                             rating_text += f"{emoji} {count}  "
                         rating_text += f"(всего {total})"
-                
                 try:
                     await message.answer(
-                        f"✅ Собеседник найден!{rating_text}{interests_text}{common_text}\n\n"
+                        f"Собеседник найден!{rating_text}{interests_text}{common_text}\n\n"
                         f"Можете начинать общение.\n\n"
                         f"Все сообщения пересылаются анонимно.\n\n"
-                        f"⏭ — сменить собеседника\n"
-                        f"🚨 — пожаловаться на нарушение\n"
-                        f"❌ — завершить чат",
+                        f"Следующий собеседник — сменить собеседника\n"
+                        f"Пожаловаться — пожаловаться на нарушение\n"
+                        f"Завершить чат — завершить чат",
                         reply_markup=chat_kb()
                     )
                 except Exception:
                     active_chats.pop(user_id, None)
                     active_chats.pop(partner_id, None)
                     try:
-                        await bot.send_message(partner_id, "❌ Собеседник недоступен. Попробуйте найти нового.", reply_markup=main_kb())
+                        await bot.send_message(partner_id, "Собеседник недоступен. Попробуйте найти нового.", reply_markup=main_kb())
                     except Exception:
                         pass
                     return
-        
         if not partner_id:
             waiting_queue.append(user_id)
             my_int_text = ""
             if my_interests:
-                my_int_text = "\n🎯 Ваши интересы: " + ", ".join([INTERESTS.get(i, i) for i in my_interests])
+                my_int_text = "\nВаши интересы: " + ", ".join([INTERESTS.get(i, i) for i in my_interests])
             await message.answer(
-                f"⏳ Ищем собеседника...{my_int_text}\n"
-                f"Как только кто-то подключится — начнём чат!",
+                f"Ищем собеседника...{my_int_text}\n"
+                f"Как только кто-то подключится — начнем чат!",
                 reply_markup=searching_kb()
             )
 
@@ -1056,18 +976,16 @@ async def disconnect_pair(user_id, notify=True):
         active_chats.pop(user_id, None)
         active_chats.pop(partner_id, None)
         report_pending.discard(partner_id)
-    
     for uid, other_id in [(user_id, partner_id), (partner_id, user_id)]:
         try:
-            await bot.send_message(uid, "👤 Оцените собеседника:", reply_markup=reaction_kb(other_id))
+            await bot.send_message(uid, "Оцените собеседника:", reply_markup=reaction_kb(other_id))
         except Exception:
             pass
-    
     if notify and partner_id:
         try:
             await bot.send_message(
                 partner_id,
-                "❌ Собеседник завершил чат.\n\nЧто дальше?",
+                "Собеседник завершил чат.\n\nЧто дальше?",
                 reply_markup=after_chat_kb()
             )
         except Exception:
@@ -1084,19 +1002,19 @@ async def process_reaction(callback: CallbackQuery):
     rated_id = int(parts[2])
     user_id = callback.from_user.id
     if user_id == rated_id:
-        await callback.answer("❌ Нельзя оценить самого себя!")
+        await callback.answer("Нельзя оценить самого себя!")
         return
     await add_reaction(rated_id, reaction)
     try:
         await callback.message.edit_text(
-            f"✅ Вы поставили реакцию {reaction}\n\n"
+            f"Вы поставили реакцию {reaction}\n\n"
             f"Спасибо за обратную связь!"
         )
     except Exception:
         pass
     await callback.answer()
 
-@dp.message(F.text == "❌ Отменить поиск")
+@dp.message(F.text == "Отменить поиск")
 async def cancel_search(message: Message):
     user_id = message.from_user.id
     async with _chat_lock:
@@ -1107,11 +1025,11 @@ async def cancel_search(message: Message):
                 waiting_queue.remove(user_id)
             except ValueError:
                 pass
-        await message.answer("❌ Поиск отменён.", reply_markup=main_kb())
+        await message.answer("Поиск отменен.", reply_markup=main_kb())
     else:
         await message.answer("Вы не в поиске.", reply_markup=main_kb())
 
-@dp.message(F.text == "❌ Завершить чат")
+@dp.message(F.text == "Завершить чат")
 async def end_chat(message: Message):
     user_id = message.from_user.id
     report_pending.discard(user_id)
@@ -1124,33 +1042,33 @@ async def end_chat(message: Message):
                 waiting_queue.remove(user_id)
             except ValueError:
                 pass
-        await message.answer("❌ Поиск отменён.", reply_markup=main_kb())
+        await message.answer("Поиск отменен.", reply_markup=main_kb())
         return
     if in_chat:
         await disconnect_pair(user_id, notify=True)
-        await message.answer("❌ Чат завершён.\n\nЧто дальше?", reply_markup=after_chat_kb())
+        await message.answer("Чат завершен.\n\nЧто дальше?", reply_markup=after_chat_kb())
     else:
         await message.answer("Вы не в чате.", reply_markup=main_kb())
 
-@dp.message(F.text == "⏭ Следующий собеседник")
+@dp.message(F.text == "Следующий собеседник")
 async def next_partner(message: Message):
     user_id = message.from_user.id
     if not await is_registered(user_id):
-        await message.answer("📋 Сначала пройдите регистрацию. Нажмите /start")
+        await message.answer("Сначала пройдите регистрацию. Нажмите /start")
         return
     async with _chat_lock:
         in_chat = user_id in active_chats
         in_queue = user_id in waiting_queue
     if in_chat:
         await disconnect_pair(user_id, notify=True)
-        await message.answer("⏭ Ищем нового собеседника...", reply_markup=main_kb())
+        await message.answer("Ищем нового собеседника...", reply_markup=main_kb())
         await find_partner(message)
     elif in_queue:
-        await message.answer("⏳ Вы уже в очереди. Ожидайте...")
+        await message.answer("Вы уже в очереди. Ожидайте...")
     else:
-        await message.answer("Вы не в чате. Нажмите «Найти собеседника».", reply_markup=main_kb())
+        await message.answer("Вы не в чате. Нажмите Найти собеседника.", reply_markup=main_kb())
 
-@dp.message(F.text == "🚨 Пожаловаться")
+@dp.message(F.text == "Пожаловаться")
 async def report_start(message: Message):
     user_id = message.from_user.id
     if user_id not in active_chats:
@@ -1158,36 +1076,35 @@ async def report_start(message: Message):
         return
     report_pending.add(user_id)
     await message.answer(
-        "🚨 Опишите нарушение одним сообщением.\n"
+        "Опишите нарушение одним сообщением.\n"
         "Например: спам, оскорбления, нежелательный контент.\n\n"
-        "Нажмите «Отмена», чтобы отменить.",
+        "Нажмите Отмена, чтобы отменить.",
         reply_markup=cancel_kb()
     )
 
 # ============ АДМИН-КОМАНДЫ ============
-
 @dp.message(Command("stats"))
 async def cmd_stats(message: Message):
     if message.from_user.id != ADMIN_ID:
-        await message.answer("⛔ Эта команда только для администратора.")
+        await message.answer("Эта команда только для администратора.")
         return
     total_users, total_bans, total_reports = await get_stats()
     async with _chat_lock:
         chats = len(active_chats) // 2
         queue = len(waiting_queue)
     await message.answer(
-        f"📊 Статистика:\n\n"
-        f"👤 Пользователей: {total_users}\n"
-        f"🚫 Заблокировано: {total_bans}\n"
-        f"🚨 Жалоб: {total_reports}\n\n"
-        f"🟢 Активных чатов: {chats}\n"
-        f"⏳ В очереди: {queue}"
+        f"Статистика:\n\n"
+        f"Пользователей: {total_users}\n"
+        f"Заблокировано: {total_bans}\n"
+        f"Жалоб: {total_reports}\n\n"
+        f"Активных чатов: {chats}\n"
+        f"В очереди: {queue}"
     )
 
 @dp.message(Command("ban"))
 async def cmd_ban(message: Message):
     if message.from_user.id != ADMIN_ID:
-        await message.answer("⛔ Эта команда только для администратора.")
+        await message.answer("Эта команда только для администратора.")
         return
     args = message.text.split(maxsplit=2)
     if len(args) < 2:
@@ -1197,28 +1114,28 @@ async def cmd_ban(message: Message):
         user_id = int(args[1])
         reason = args[2] if len(args) > 2 else "Без причины"
         if user_id == ADMIN_ID:
-            await message.answer("❌ Нельзя забанить администратора!")
+            await message.answer("Нельзя забанить администратора!")
             return
         await ban_user(user_id, reason)
         if user_id in active_chats:
             partner_id = await disconnect_pair(user_id, notify=False)
             if partner_id:
                 try:
-                    await bot.send_message(partner_id, "❌ Собеседник был заблокирован администратором.", reply_markup=main_kb())
+                    await bot.send_message(partner_id, "Собеседник был заблокирован администратором.", reply_markup=main_kb())
                 except Exception:
                     pass
             try:
-                await bot.send_message(user_id, f"🚫 Вы заблокированы администратором.\nПричина: {reason}", reply_markup=main_kb())
+                await bot.send_message(user_id, f"Вы заблокированы администратором.\nПричина: {reason}", reply_markup=main_kb())
             except Exception:
                 pass
-        await message.answer(f"🚫 Пользователь {user_id} заблокирован.\nПричина: {reason}")
+        await message.answer(f"Пользователь {user_id} заблокирован.\nПричина: {reason}")
     except ValueError:
-        await message.answer("❌ Неверный ID. Использование: /ban 123456789")
+        await message.answer("Неверный ID. Использование: /ban 123456789")
 
 @dp.message(Command("unban"))
 async def cmd_unban(message: Message):
     if message.from_user.id != ADMIN_ID:
-        await message.answer("⛔ Эта команда только для администратора.")
+        await message.answer("Эта команда только для администратора.")
         return
     args = message.text.split()
     if len(args) < 2:
@@ -1228,15 +1145,14 @@ async def cmd_unban(message: Message):
         user_id = int(args[1])
         await unban_user(user_id)
         try:
-            await bot.send_message(user_id, "✅ Вы были разблокированы администратором.\nМожете снова пользоваться ботом.")
+            await bot.send_message(user_id, "Вы были разблокированы администратором.\nМожете снова пользоваться ботом.")
         except Exception:
             pass
-        await message.answer(f"✅ Пользователь {user_id} разблокирован.")
+        await message.answer(f"Пользователь {user_id} разблокирован.")
     except ValueError:
-        await message.answer("❌ Неверный ID. Использование: /unban 123456789")
+        await message.answer("Неверный ID. Использование: /unban 123456789")
 
 # ============ ПЕРЕСЫЛКА СООБЩЕНИЙ ============
-
 @dp.message(F.content_type.in_({
     "text", "photo", "video", "voice", "audio",
     "document", "sticker", "animation", "video_note"
@@ -1253,7 +1169,7 @@ async def relay_message(message: Message):
             try:
                 await bot.send_message(
                     ADMIN_ID,
-                    f"🚨 Новая жалоба!\n\n"
+                    f"Новая жалоба!\n\n"
                     f"От: {user_id}\n"
                     f"На: {partner_id}\n"
                     f"Причина: {reason}\n\n"
@@ -1261,32 +1177,32 @@ async def relay_message(message: Message):
                 )
             except Exception:
                 pass
-            await message.answer("✅ Жалоба отправлена администратору.", reply_markup=chat_kb())
+            await message.answer("Жалоба отправлена администратору.", reply_markup=chat_kb())
         else:
-            await message.answer("❌ Собеседник уже вышел. Жалоба не отправлена.", reply_markup=main_kb())
+            await message.answer("Собеседник уже вышел. Жалоба не отправлена.", reply_markup=main_kb())
         report_pending.discard(user_id)
         return
     if user_id in waiting_queue:
-        await message.answer("⏳ Подождите, ищем собеседника...")
+        await message.answer("Подождите, ищем собеседника...")
         return
     if user_id not in active_chats:
-        await message.answer("Вы не в чате. Нажмите «Найти собеседника».", reply_markup=main_kb())
+        await message.answer("Вы не в чате. Нажмите Найти собеседника.", reply_markup=main_kb())
         return
     if await is_banned(user_id):
-        await message.answer("🚫 Вы заблокированы.")
+        await message.answer("Вы заблокированы.")
         await disconnect_pair(user_id, notify=False)
         return
     partner_id = active_chats[user_id]
     if await is_banned(partner_id):
         await disconnect_pair(user_id, notify=False)
-        await message.answer("❌ Ваш собеседник был заблокирован.", reply_markup=main_kb())
+        await message.answer("Ваш собеседник был заблокирован.", reply_markup=main_kb())
         return
     try:
         await message.copy_to(chat_id=partner_id)
     except Exception as e:
         logging.error(f"Ошибка пересылки: {e}")
         await disconnect_pair(user_id, notify=False)
-        await message.answer("⚠️ Собеседник недоступен. Чат завершён.", reply_markup=main_kb())
+        await message.answer("Собеседник недоступен. Чат завершен.", reply_markup=main_kb())
 
 @dp.edited_message()
 async def relay_edit(message: Message):
@@ -1296,7 +1212,7 @@ async def relay_edit(message: Message):
     text = message.text or message.caption
     if text:
         try:
-            await bot.send_message(active_chats[user_id], f"✏️ {text}")
+            await bot.send_message(active_chats[user_id], f"(изменено) {text}")
         except Exception:
             pass
 
@@ -1316,14 +1232,14 @@ async def my_chat_member_handler(update: ChatMemberUpdated):
                 report_pending.discard(partner_id)
         if partner_id:
             try:
-                await bot.send_message(partner_id, "❌ Собеседник покинул чат.", reply_markup=after_chat_kb())
+                await bot.send_message(partner_id, "Собеседник покинул чат.", reply_markup=after_chat_kb())
             except Exception:
                 pass
 
 # ============ GRACEFUL SHUTDOWN ============
 @dp.shutdown()
 async def on_shutdown():
-    logging.info("🔌 Завершение работы...")
+    logging.info("Завершение работы...")
     async with _chat_lock:
         processed = set()
         for uid, pid in list(active_chats.items()):
@@ -1333,7 +1249,7 @@ async def on_shutdown():
             processed.add(pid)
             for target in (uid, pid):
                 try:
-                    await bot.send_message(target, "🔌 Бот перезагружается. Чат завершён.", reply_markup=main_kb())
+                    await bot.send_message(target, "Бот перезагружается. Чат завершен.", reply_markup=main_kb())
                 except Exception:
                     pass
         active_chats.clear()
@@ -1345,7 +1261,7 @@ async def on_shutdown():
 async def main():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     await init_db()
-    logging.info("🚀 Бот запускается...")
+    logging.info("Бот запускается...")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
