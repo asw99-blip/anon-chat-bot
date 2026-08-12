@@ -12,14 +12,9 @@ from aiogram.types import (
 from aiogram.filters import Command
 
 # ============ КОНФИГУРАЦИЯ ============
-BOT_TOKEN = os.getenv("BOT_TOKEN", "8943522365:AAFcdcGGA8FKV3GlOLp7kEk4tyt-Qh96s0c")
-ADMIN_ID = int(os.getenv("ADMIN_ID", "8987146035"))
+BOT_TOKEN = os.getenv("8943522365:AAFcdcGGA8FKV3GlOLp7kEk4tyt-Qh96s0c")
+ADMIN_ID = int(os.getenv("8987146035"))
 DATABASE_URL = os.getenv("DATABASE_URL")
-
-if BOT_TOKEN == "8943522365:AAFcdcGGA8FKV3GlOLp7kEk4tyt-Qh96s0c":
-    raise ValueError("❌ Установите BOT_TOKEN в переменных окружения!")
-if not ADMIN_ID:
-    raise ValueError("❌ Установите ADMIN_ID в переменных окружения!")
 
 if DATABASE_URL:
     import psycopg2
