@@ -12,8 +12,9 @@ from aiogram.types import (
 from aiogram.filters import Command
 
 # ============ КОНФИГУРАЦИЯ ============
-BOT_TOKEN = os.getenv("8943522365:AAFcdcGGA8FKV3GlOLp7kEk4tyt-Qh96s0c")
-ADMIN_ID = int(os.getenv("ADMIN_ID","0"))
+# ⚠️ ЗАМЕНИТЕ НА СВОИ РЕАЛЬНЫЕ ДАННЫЕ ПЕРЕД ЗАГРУЗКОЙ!
+BOT_TOKEN = "8943522365:AAFcdcGGA8FKV3GlOLp7kEk4tyt-Qh96s0c"  
+ADMIN_ID = 8987146035           
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 if DATABASE_URL:
