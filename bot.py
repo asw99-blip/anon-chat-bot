@@ -12,9 +12,8 @@ from aiogram.types import (
 from aiogram.filters import Command
 
 # ============ КОНФИГУРАЦИЯ ============
-# ⚠️ ЗАМЕНИТЕ НА СВОИ РЕАЛЬНЫЕ ДАННЫЕ ПЕРЕД ЗАГРУЗКОЙ!
-BOT_TOKEN = "8943522365:AAFcdcGGA8FKV3GlOLp7kEk4tyt-Qh96s0c"  
-ADMIN_ID = 8987146035           
+BOT_TOKEN = "8943522365:AAFcdcGGA8FKV3GlOLp7kEk4tyt-Qh96s0c" 
+ADMIN_ID = 8987146035          
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 if DATABASE_URL:
@@ -292,6 +291,12 @@ def main_kb():
             [KeyboardButton(text="🔍 Найти собеседника")],
             [KeyboardButton(text="👤 Профиль")]
         ],
+        resize_keyboard=True
+    )
+
+def searching_kb():
+    return ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text="❌ Отменить поиск")]],
         resize_keyboard=True
     )
 
@@ -783,7 +788,7 @@ async def find_partner(message: Message):
             await message.answer(
                 "⏳ Ищем собеседника...\n"
                 "Как только кто-то подключится — начнём чат!",
-                reply_markup=chat_kb()
+                reply_markup=searching_kb()
             )
 
 async def disconnect_pair(user_id, notify=True):
@@ -839,6 +844,21 @@ async def process_reaction(callback: CallbackQuery):
     except Exception:
         pass
     await callback.answer()
+
+@dp.message(F.text == "❌ Отменить поиск")
+async def cancel_search(message: Message):
+    user_id = message.from_user.id
+    async with _chat_lock:
+        in_queue = user_id in waiting_queue
+    if in_queue:
+        async with _chat_lock:
+            try:
+                waiting_queue.remove(user_id)
+            except ValueError:
+                pass
+        await message.answer("❌ Поиск отменён.", reply_markup=main_kb())
+    else:
+        await message.answer("Вы не в поиске.", reply_markup=main_kb())
 
 @dp.message(F.text == "❌ Завершить чат")
 async def end_chat(message: Message):
