@@ -13,7 +13,7 @@ from aiogram.filters import Command
 
 # ============ КОНФИГУРАЦИЯ ============
 BOT_TOKEN = os.getenv("8943522365:AAFcdcGGA8FKV3GlOLp7kEk4tyt-Qh96s0c")
-ADMIN_ID = int(os.getenv("8987146035"))
+ADMIN_ID = int(os.getenv("ADMIN_ID","0"))
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 if DATABASE_URL:
